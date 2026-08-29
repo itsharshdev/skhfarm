@@ -1,1 +1,114 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --ft-emerald-primary: #059669;
+    --ft-emerald-accent: #10b981;
+    --ft-teal-accent: #0d9488;
+    --ft-slate-surface: #020617;
+  }
+
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: #0f172a;
+    background-color: #f8fafc;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom Keyframe Animations */
+@keyframes ftLogoPulse {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0px rgba(16, 185, 129, 0));
+  }
+  50% {
+    transform: scale(1.03);
+    filter: drop-shadow(0 0 12px rgba(16, 185, 129, 0.45));
+  }
+}
+
+@keyframes ftPulseSlow {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes ftFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ftShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Utility Animation Classes */
+.animate-logo-pulse {
+  animation: ftLogoPulse 2.4s ease-in-out infinite;
+}
+
+.animate-pulse-slow {
+  animation: ftPulseSlow 4s ease-in-out infinite;
+}
+
+.animate-fadeIn {
+  animation: ftFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: ftShimmer 1.5s infinite;
+}
+
+/* Design System Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(51, 65, 85, 0.8);
+}
+
+/* Accessibility: Prefers Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-logo-pulse,
+  .animate-pulse-slow,
+  .animate-fadeIn,
+  .animate-shimmer,
+  .animate-bounce-subtle,
+  .animate-spin {
+    animation: none !important;
+  }
+}

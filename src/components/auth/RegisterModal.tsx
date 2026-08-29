@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuthRole } from '../../context/AuthRoleContext';
 import { StakeholderRole } from '../../types';
 import { authService, OrganizationOption } from '../../services/authService';
+import { FarmTracerLogo } from '../brand/FarmTracerLogo';
 import {
   X,
   Building2,
@@ -86,12 +87,10 @@ export const RegisterModal: React.FC = () => {
       <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
-          <div className="flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-emerald-600 text-white">
-              <Building2 className="w-5 h-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            <FarmTracerLogo variant="icon-only" size="sm" />
             <div>
-              <h3 className="font-bold text-slate-900 text-lg">Register Stakeholder</h3>
+              <h3 className="font-bold text-slate-900 text-lg font-['Space_Grotesk',sans-serif]">Register Stakeholder</h3>
               <p className="text-xs text-slate-500">Live Supabase Registration & Profile Association</p>
             </div>
           </div>

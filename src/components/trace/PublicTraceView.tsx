@@ -39,6 +39,7 @@ import { SupplyChainRouteMap } from './SupplyChainRouteMap';
 import { EventTimelineView } from './EventTimelineView';
 import { BatchDetailDrawer } from './BatchDetailDrawer';
 import { AIInsightsPanel } from '../ai/AIInsightsPanel';
+import { BatchQRModal } from '../operations/BatchQRModal';
 
 interface PublicTraceViewProps {
   batch: Batch;
@@ -62,6 +63,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
   // Selected node for slide-over drawer
   const [selectedNode, setSelectedNode] = useState<LineageNode | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
+  const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   // Sync sub-tab from URL hash on mount & hashchange
@@ -236,24 +238,40 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 
           {/* QR Code & Scan Trigger */}
           <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between gap-4 p-4 rounded-2xl bg-slate-50/80 border border-slate-100 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-16 h-16 bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center">
+            <button
+              type="button"
+              onClick={() => setIsQRModalOpen(true)}
+              className="flex items-center gap-3 text-left group cursor-pointer hover:opacity-90 transition-opacity"
+              title="Click to view full printable QR label and high-res download"
+            >
+              <div className="w-16 h-16 bg-white p-1.5 rounded-xl border border-slate-200 shadow-2xs flex items-center justify-center group-hover:border-emerald-500 transition-colors">
                 <QrCode className="w-full h-full text-slate-900" />
               </div>
               <div>
                 <span className="text-[11px] font-bold text-slate-500 uppercase block">Product QR</span>
                 <span className="font-mono text-xs font-bold text-slate-800">{batch.batchId}</span>
-                <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5">Tamper-Proof Trace</span>
+                <span className="text-[10px] text-emerald-700 font-semibold block mt-0.5 group-hover:underline">
+                  View & Print QR
+                </span>
               </div>
-            </div>
-
-            <button
-              onClick={() => setScannerOpen(true)}
-              className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span>Scan Item QR</span>
             </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsQRModalOpen(true)}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>View Label</span>
+              </button>
+              <button
+                onClick={() => setScannerOpen(true)}
+                className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs"
+              >
+                <Camera className="w-3.5 h-3.5" />
+                <span>Scan QR</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -573,6 +591,14 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
         onSelectBatch={(bId) => {
           if (onSelectBatch) onSelectBatch(bId);
         }}
+      />
+
+      {/* 8. Printable QR Code & High-Res Export Modal */}
+      <BatchQRModal
+        isOpen={isQRModalOpen}
+        onClose={() => setIsQRModalOpen(false)}
+        batch={batch}
+        onInspectBatch={onSelectBatch}
       />
     </div>
   );

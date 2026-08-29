@@ -1,5 +1,6 @@
 import React from 'react';
-import { Sprout, ShieldCheck, Sun, CheckCircle2, Warehouse, Cpu } from 'lucide-react';
+import { FarmTracerLogo } from '../brand/FarmTracerLogo';
+import { ShieldCheck, Sun, CheckCircle2, Warehouse, Cpu } from 'lucide-react';
 
 interface FooterProps {
   onSelectBatch?: (id: string) => void;
@@ -12,14 +13,7 @@ export const Footer: React.FC<FooterProps> = ({ onSelectBatch }) => {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand & Super PS info */}
           <div className="md:col-span-2 space-y-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500 flex items-center justify-center text-slate-950 font-bold">
-                <Sprout className="w-5 h-5" />
-              </div>
-              <span className="font-extrabold text-base text-white tracking-tight font-['Space_Grotesk',sans-serif]">
-                FARM TRACER
-              </span>
-            </div>
+            <FarmTracerLogo variant="full" theme="light" size="sm" showTagline />
             <p className="text-xs text-slate-400 max-w-md leading-relaxed">
               End-to-End Cold-Chain & Food Traceability Platform addressing the Hackathon Super Problem Statement. Protecting agricultural produce quality and consumer trust across post-harvest storage, transit, processing transformation, and retail.
             </p>

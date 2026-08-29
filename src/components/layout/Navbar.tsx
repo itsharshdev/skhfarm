@@ -3,8 +3,8 @@ import { useAuthRole } from '../../context/AuthRoleContext';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { Language } from '../../i18n/translations';
 import { offlineSyncService } from '../../services/offlineSyncService';
+import { FarmTracerLogo } from '../brand/FarmTracerLogo';
 import {
-  Sprout,
   Shield,
   QrCode,
   Search,
@@ -69,24 +69,14 @@ export const Navbar: React.FC<NavbarProps> = ({ onSearchBatch, onNavigateHome, o
             <button
               id="navbar-brand-logo-btn"
               onClick={onNavigateHome}
-              className="flex items-center gap-2.5 text-left group"
+              className="text-left group focus:outline-none"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
-                <Sprout className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <span className="font-extrabold text-lg tracking-tight text-slate-900 font-['Space_Grotesk',sans-serif]">
-                    FARM TRACER
-                  </span>
-                  <span className="hidden sm:inline-flex px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold tracking-wide">
-                    SUPER-PS
-                  </span>
-                </div>
-                <span className="text-[10px] text-slate-500 font-medium hidden md:block">
-                  Cold-Chain & Food Traceability
-                </span>
-              </div>
+              <FarmTracerLogo
+                variant="full"
+                theme="dark"
+                size="sm"
+                showTagline
+              />
             </button>
           </div>
 

@@ -20,6 +20,8 @@ import { AuthorityDashboardView } from './components/dashboard/AuthorityDashboar
 import { AdminDashboardView } from './components/dashboard/AdminDashboardView';
 import { ConsumerDashboardView } from './components/dashboard/ConsumerDashboardView';
 import { OfflineSyncDrawer } from './components/offline/OfflineSyncDrawer';
+import { SplashScreen } from './components/brand/SplashScreen';
+import { PageLoading } from './components/common/LoadingStates';
 import { traceService } from './services/traceService';
 import { Batch } from './types';
 import { AlertCircle, ArrowLeft, Layers, ShieldCheck, User, QrCode, Sparkles } from 'lucide-react';
@@ -29,6 +31,7 @@ export type AppViewMode = 'landing' | 'trace' | 'batches' | 'dashboard';
 function AppContent() {
   const { activeBatchId, setActiveBatchId, setScannerOpen, currentUser, isAuthenticated, setLoginModalOpen } =
     useAuthRole();
+  const [showSplash, setShowSplash] = useState(true);
   const [activeView, setActiveView] = useState<AppViewMode>('landing');
   const [currentBatch, setCurrentBatch] = useState<Batch | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,12 +215,10 @@ function AppContent() {
         {activeView === 'trace' && (
           <>
             {loading ? (
-              <div className="py-20 text-center space-y-3">
-                <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                <p className="text-sm font-semibold text-slate-600">
-                  Decoding batch lineage and storage conditions...
-                </p>
-              </div>
+              <PageLoading
+                message="Decoding batch traceability & telemetry records..."
+                submessage="Validating cryptographic chain integrity and solar cold-chain state"
+              />
             ) : errorNotFound ? (
               <div className="py-16 text-center max-w-md mx-auto space-y-4 bg-white p-8 rounded-3xl border border-slate-200 shadow-xs">
                 <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto">
@@ -248,6 +249,9 @@ function AppContent() {
           </>
         )}
       </main>
+
+      {/* Startup Splash Experience */}
+      {showSplash && <SplashScreen onComplete={() => setShowSplash(false)} />}
 
       {/* Global Modals */}
       <QRScannerModal onScanComplete={handleSelectBatch} />

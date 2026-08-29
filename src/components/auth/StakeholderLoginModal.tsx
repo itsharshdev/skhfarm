@@ -21,6 +21,8 @@ import {
   Loader2,
 } from 'lucide-react';
 
+import { FarmTracerLogo } from '../brand/FarmTracerLogo';
+
 interface RoleOption {
   role: StakeholderRole;
   title: string;
@@ -172,12 +174,10 @@ export const StakeholderLoginModal: React.FC = () => {
       <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-slate-900 text-white">
-              <Lock className="w-5 h-5" />
-            </div>
+          <div className="flex items-center gap-3">
+            <FarmTracerLogo variant="icon-only" size="sm" />
             <div>
-              <h3 className="font-bold text-slate-900 text-lg">Stakeholder Authentication</h3>
+              <h3 className="font-bold text-slate-900 text-lg font-['Space_Grotesk',sans-serif]">Stakeholder Authentication</h3>
               <p className="text-xs text-slate-500">Live Supabase Authentication & Role Access</p>
             </div>
           </div>
