@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Batch } from '../../types';
+import { Batch, PowerSourceStatus, SolarGenerationStatus } from '../../types';
 import { traceService } from '../../services/traceService';
 import { Thermometer, Sun, Zap, Battery, AlertTriangle, Check, X } from 'lucide-react';
 
@@ -20,12 +20,13 @@ export const StorageConditionUpdateModal: React.FC<StorageConditionUpdateModalPr
   const currentHum = batch.currentStorage?.humidity || 55;
   const [temperature, setTemperature] = useState<number>(currentTemp);
   const [humidity, setHumidity] = useState<number>(currentHum);
-  const [powerStatus, setPowerStatus] = useState<'SOLAR' | 'GRID' | 'HYBRID' | 'BATTERY_BACKUP'>(
+  const [powerStatus, setPowerStatus] = useState<PowerSourceStatus>(
     batch.currentStorage?.powerStatus || 'SOLAR'
   );
-  const [solarStatus, setSolarStatus] = useState<'OPTIMAL' | 'MODERATE' | 'LOW' | 'CHARGING' | 'DISCHARGING'>(
+  const [solarStatus, setSolarStatus] = useState<SolarGenerationStatus>(
     batch.currentStorage?.solarStatus || 'OPTIMAL'
   );
+
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 

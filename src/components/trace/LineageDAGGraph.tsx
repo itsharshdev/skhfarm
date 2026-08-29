@@ -29,6 +29,8 @@ import { DEMO_LINEAGE_NODES, DEMO_LINEAGE_LINKS } from '../../data/mockData';
 interface LineageDAGGraphProps {
   batch: Batch;
   selectedNodeId?: string | null;
+  customNodes?: LineageNode[];
+  customLinks?: LineageLink[];
   onSelectNode: (nodeId: string, batchId?: string) => void;
   onSelectBatch?: (batchId: string) => void;
 }
@@ -36,6 +38,8 @@ interface LineageDAGGraphProps {
 export const LineageDAGGraph: React.FC<LineageDAGGraphProps> = ({
   batch,
   selectedNodeId,
+  customNodes,
+  customLinks,
   onSelectNode,
   onSelectBatch,
 }) => {
@@ -45,6 +49,13 @@ export const LineageDAGGraph: React.FC<LineageDAGGraphProps> = ({
 
   // Generate or adapt nodes for the current active batch
   const { nodes, links } = useMemo(() => {
+    if (customNodes && customNodes.length > 0 && customLinks) {
+      return {
+        nodes: customNodes,
+        links: customLinks,
+      };
+    }
+
     if (batch.batchId === 'BIS-2026-092') {
       return {
         nodes: DEMO_LINEAGE_NODES,

@@ -1,4 +1,13 @@
-import { AIAnalysisRecord, SafetyRiskAlert, AISeverity, SafetyStatusType } from '../types';
+import {
+  AIAnalysisRecord,
+  SafetyRiskAlert,
+  AISeverity,
+  SafetyStatusType,
+  Batch,
+  AIRiskAnalysisRecord,
+} from '../types';
+import { supabase } from './supabaseClient';
+import { calculateExpiryStatus } from './alertService';
 
 export const INITIAL_AI_RECORDS: AIAnalysisRecord[] = [
   {
@@ -9,28 +18,13 @@ export const INITIAL_AI_RECORDS: AIAnalysisRecord[] = [
     result: 'Stable Core Temperature Profile (21.4°C ±0.8°C)',
     confidence: 0.96,
     severity: 'LOW',
-    explanation: 'Thermal forecast model evaluated 48-hour historical solar micro-climate telemetry. Storage temperature remained continuously within the safe wheat storage envelope (15.0°C – 24.0°C). Solar PV generation provided 98.4% uptime.',
+    explanation: 'Thermal forecast model evaluated historical solar micro-climate telemetry. Storage temperature remained continuously within the safe wheat storage envelope (15.0°C – 24.0°C). Solar PV generation provided 98.4% uptime.',
     affectedStage: 'Solar Smart Hub Cold Storage',
-    storageUnitId: 'SOLAR-HUB-KPG-01',
+    storageUnitId: 'SU-SOLAR-04',
     modelVersion: 'CropThermo-Predict-v1.8.2',
     timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
     isDemoState: true,
     recommendedAction: 'Continue nominal solar-assisted aeration schedule. No manual intervention required.',
-  },
-  {
-    id: 'AI-REC-WHT-02',
-    batchId: 'WHT-MH-2026-001',
-    type: 'SHELF_LIFE_PREDICTION',
-    title: 'Dynamic Shelf-Life Expectancy: +42 Days Over Baseline',
-    result: 'Projected Total Usability: 407 Days (Nominal 365 Days)',
-    confidence: 0.91,
-    severity: 'LOW',
-    explanation: 'Due to consistent low-humidity solar warehouse storage (52% RH) and absence of moisture spikes, wheat endosperm vitality degradation is 14% slower than open-air storage baselines.',
-    affectedStage: 'Farm & Mandi Custody',
-    modelVersion: 'AgriShelfLife-ML-v3.0',
-    timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    isDemoState: true,
-    recommendedAction: 'Eligible for premium Grade A milling certification.',
   },
   {
     id: 'AI-REC-BIS-01',
@@ -40,7 +34,7 @@ export const INITIAL_AI_RECORDS: AIAnalysisRecord[] = [
     result: '100% Upstream Batch Provenance Match',
     confidence: 0.98,
     severity: 'LOW',
-    explanation: 'Graph traversal algorithm verified all 3 upstream parent inputs (Organic Wheat WHT-MH-2026-001, Sulfurless Sugar SGR-MH-2026-088, Fresh Milk MLK-ND-2026-012). Zero unauthorized lot mixing detected.',
+    explanation: 'Graph traversal algorithm verified upstream parent inputs (Organic Wheat WHT-MH-2026-001, Sulfurless Sugar SUG-MH-2026-003). Zero unauthorized lot mixing detected.',
     affectedStage: 'Baking & Packaging Plant',
     modelVersion: 'DAG-IntegrityNet-v2.4',
     timestamp: new Date(Date.now() - 1000 * 60 * 90).toISOString(),
@@ -48,97 +42,78 @@ export const INITIAL_AI_RECORDS: AIAnalysisRecord[] = [
     recommendedAction: 'Proceed with retail batch distribution. Traceability complete.',
   },
   {
-    id: 'AI-REC-TOM-01',
-    batchId: 'TOM-MH-CONTAM-2026',
+    id: 'AI-REC-APL-01',
+    batchId: 'APL-KSH-109',
     type: 'CONTAMINATION_DETECTION',
     title: 'High Chemical Residue Anomaly Detected',
-    result: 'Synthetic Organophosphate Pesticide Residue Flag (0.24 mg/kg vs 0.05 MRL)',
+    result: 'Synthetic Organophosphate Pesticide Residue Flag (0.18 mg/kg vs 0.01 MRL)',
     confidence: 0.94,
     severity: 'CRITICAL',
-    explanation: 'Spectroscopic lab screening and vision analysis detected synthetic pesticide residue surpassing Maximum Residue Limits (MRL). Farm claimed 100% organic certification.',
+    explanation: 'Spectroscopic screening detected synthetic pesticide residue surpassing Maximum Residue Limits (MRL). Farm claimed 100% organic certification.',
     affectedStage: 'Regional Mandi Inward Inspection',
-    evidenceRef: 'LAB-RES-TOM-8902',
+    evidenceRef: 'LAB-RES-APL-109',
     modelVersion: 'FarmVision-SpectralAI-v2.1',
     timestamp: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
     isDemoState: true,
     recommendedAction: 'Enact immediate batch quarantine. Block downstream dispatch and alert State Food Safety Authority.',
-  },
-  {
-    id: 'AI-REC-MLK-01',
-    batchId: 'MLK-ND-2026-012',
-    type: 'STORAGE_EXCURSION_RISK',
-    title: 'Reefer Transit Temperature Spike Warning',
-    result: 'Temperature Excursion (+7.2°C for 42 minutes)',
-    confidence: 0.89,
-    severity: 'MEDIUM',
-    explanation: 'During highway transit near Ahmednagar, reefer compressor switched to backup auxiliary generator during a grid transition, causing a transient 3.2°C temperature elevation above the 4.0°C chill limit.',
-    affectedStage: 'Chilled Reefer Transit Hop #2',
-    storageUnitId: 'REEFER-TRUCK-MH-12',
-    modelVersion: 'ColdGuard-StreamML-v1.5',
-    timestamp: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-    isDemoState: true,
-    recommendedAction: 'Execute rapid titration & bacterial culture screening at receiving dock before blending.',
   },
 ];
 
 export const INITIAL_SAFETY_ALERTS: SafetyRiskAlert[] = [
   {
     id: 'ALERT-RISK-001',
-    batchId: 'TOM-MH-CONTAM-2026',
-    productName: 'Organic Table Tomatoes (Lot #TOM-CONTAM)',
+    batchId: 'APL-KSH-109',
+    productName: 'Kashmir Valley Ambri Red Apples (Grade B - Recalled)',
     severity: 'CRITICAL',
     statusType: 'CONTAMINATION_FLAG',
     title: 'Active Chemical Contamination Quarantine',
-    description: 'Pesticide residue screen exceeded certified maximum limits. Immediate isolation protocol initiated.',
+    description: 'Pesticide Chlorpyrifos residue screen exceeded permissible limits (0.18 mg/kg). Quarantine active.',
     detectedAt: new Date(Date.now() - 1000 * 60 * 300).toISOString(),
-    detectedBy: 'Nashik District Food Safety Laboratory (Inspector S. Deshmukh)',
-    affectedLocations: ['Nashik Regional Mandi Yard 2', 'Cold Storage Shed 3'],
-    downstreamBatchesAffected: ['TOM-SAUCE-2026-PREMIX (Blocked)'],
+    detectedBy: 'Dr. Pradeep Sawant (State Food Safety Inspector)',
+    affectedLocations: ['Pune Regional Quarantine Locker #02'],
+    downstreamBatchesAffected: ['All Retail Distribution Blocked'],
     resolved: false,
   },
   {
     id: 'ALERT-RISK-002',
-    batchId: 'MLK-ND-2026-012',
-    productName: 'Fresh Whole Dairy Milk (Chilled Tanker #12)',
+    batchId: 'MILK-PUN-2026-809',
+    productName: 'Pure Gir Cow A2 Raw Milk (Chilled Lot 12)',
     severity: 'MEDIUM',
-    statusType: 'ANOMALY_DETECTED',
-    title: 'Cold-Chain Transient Excursion',
-    description: 'Reefer vehicle auxiliary power switchover caused 42-minute temperature rise to 7.2°C.',
-    detectedAt: new Date(Date.now() - 1000 * 60 * 240).toISOString(),
-    detectedBy: 'Solar Telemetry Gateway Node #TK-09',
-    affectedLocations: ['Highway NH-60 Transit Corridor', 'Chitale Dairy Receiving Dock'],
+    statusType: 'APPROACHING_EXPIRY',
+    title: 'Perishable Near-Expiry Warning',
+    description: 'Chilled raw milk batch has < 24 hours shelf-life remaining. Prioritize immediate FIFO clearance.',
+    detectedAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    detectedBy: 'Smart Dairy Gateway #01',
+    affectedLocations: ['Baramati Cold Milk Hub'],
     downstreamBatchesAffected: [],
-    resolved: true,
-    resolutionNotes: 'Dock lab re-test confirmed microbial safety within Grade A milk threshold. Score penalty restored.',
+    resolved: false,
   },
 ];
 
+export interface BatchRiskEvaluation {
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXPIRED';
+  riskScore: number; // 0 (safest) - 100 (highest risk)
+  riskFactors: Array<{ factor: string; impact: 'POSITIVE' | 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'; detail: string }>;
+  storageAnomalyDetected: boolean;
+  recommendations: string[];
+  isDeterministicFallback: boolean;
+  modelVersion: string;
+}
+
 class AIService {
-  private records: AIAnalysisRecord[] = [...INITIAL_AI_RECORDS];
   private alerts: SafetyRiskAlert[] = [...INITIAL_SAFETY_ALERTS];
   private listeners: (() => void)[] = [];
 
   constructor() {
-    this.loadFromStorage();
-  }
-
-  private loadFromStorage() {
     try {
-      const storedRecords = localStorage.getItem('farm_tracer_ai_records_v1');
-      if (storedRecords) this.records = JSON.parse(storedRecords);
-      const storedAlerts = localStorage.getItem('farm_tracer_safety_alerts_v1');
-      if (storedAlerts) this.alerts = JSON.parse(storedAlerts);
+      supabase
+        .channel('public:ai_risk_analyses')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_risk_analyses' }, () => {
+          this.notify();
+        })
+        .subscribe();
     } catch (e) {
-      console.warn('AI service storage load error', e);
-    }
-  }
-
-  private saveToStorage() {
-    try {
-      localStorage.setItem('farm_tracer_ai_records_v1', JSON.stringify(this.records));
-      localStorage.setItem('farm_tracer_safety_alerts_v1', JSON.stringify(this.alerts));
-    } catch (e) {
-      console.warn('AI service storage save error', e);
+      console.warn('Realtime ai_risk_analyses subscription error:', e);
     }
   }
 
@@ -150,90 +125,335 @@ class AIService {
   }
 
   private notify() {
-    this.listeners.forEach((fn) => fn());
+    this.listeners.forEach((fn) => {
+      try {
+        fn();
+      } catch (err) {
+        console.error('AI listener error:', err);
+      }
+    });
+  }
+
+  /**
+   * Deterministic & Explainable AI Risk Evaluation Engine
+   */
+  public evaluateBatchRisk(batch: Batch): BatchRiskEvaluation {
+    const riskFactors: BatchRiskEvaluation['riskFactors'] = [];
+    let riskScore = 10; // Baseline nominal risk
+    let storageAnomaly = false;
+
+    // 1. Evaluate Contamination & Recalls
+    if (batch.contaminationFlag?.flagged || batch.status === 'RECALLED') {
+      riskScore += 80;
+      riskFactors.push({
+        factor: 'Chemical / Toxic Contamination',
+        impact: 'CRITICAL',
+        detail: batch.contaminationFlag?.reason || 'Lot quarantined or recalled by state inspectorate.',
+      });
+    }
+
+    // 2. Evaluate Expiry & Shelf-Life Proximity
+    const expiry = calculateExpiryStatus(batch.expiryDate);
+    if (expiry.status === 'EXPIRED') {
+      riskScore = Math.max(riskScore, 95);
+      riskFactors.push({
+        factor: 'Shelf-Life Expiry',
+        impact: 'CRITICAL',
+        detail: 'Batch has passed expiration date. Not safe for retail sale.',
+      });
+    } else if (expiry.status === 'NEAR_EXPIRY') {
+      riskScore += 35;
+      riskFactors.push({
+        factor: 'Imminent Expiration',
+        impact: 'HIGH',
+        detail: `${expiry.daysRemaining} days remaining in safe consumption window.`,
+      });
+    } else {
+      riskFactors.push({
+        factor: 'Shelf-Life Window',
+        impact: 'POSITIVE',
+        detail: `${expiry.daysRemaining} days remaining until expiration.`,
+      });
+    }
+
+    // 3. Evaluate Storage & Micro-Climate Telemetry
+    if (batch.currentStorage) {
+      if (batch.currentStorage.conditionStatus === 'OUT_OF_RANGE') {
+        storageAnomaly = true;
+        riskScore += 40;
+        riskFactors.push({
+          factor: 'Thermal Storage Excursion',
+          impact: 'HIGH',
+          detail: `Telemetry logged at ${batch.currentStorage.temperature}°C, violating safe bounds.`,
+        });
+      } else if (batch.currentStorage.conditionStatus === 'WARNING') {
+        riskScore += 15;
+        riskFactors.push({
+          factor: 'Storage Parameter Drift',
+          impact: 'MEDIUM',
+          detail: `Humidity/temperature approaching upper boundary limits (${batch.currentStorage.humidity}% RH).`,
+        });
+      } else if (batch.currentStorage.powerStatus === 'SOLAR') {
+        riskFactors.push({
+          factor: 'Clean Solar Cold Chain',
+          impact: 'POSITIVE',
+          detail: `Maintained on 100% solar micro-climate power (${batch.currentStorage.temperature}°C).`,
+        });
+      }
+    }
+
+    // 4. Evaluate Traceability Completeness & Evidence Proof
+    if (batch.events.length >= 3 && batch.evidences.length === 0) {
+      riskScore += 20;
+      riskFactors.push({
+        factor: 'Missing Visual Proof',
+        impact: 'MEDIUM',
+        detail: 'Multi-stage custodial handoffs lack timestamped camera capture proof.',
+      });
+    } else if (batch.evidences.length > 0) {
+      riskFactors.push({
+        factor: 'Cryptographic Media Evidence',
+        impact: 'POSITIVE',
+        detail: `${batch.evidences.length} tamper-proof camera records verified.`,
+      });
+    }
+
+    // 5. Evaluate Multi-Parent Provenance Integrity
+    if (batch.parentBatchIds && batch.parentBatchIds.length > 0) {
+      riskFactors.push({
+        factor: 'Multi-Ingredient Lineage',
+        impact: 'POSITIVE',
+        detail: `${batch.parentBatchIds.length} upstream ingredient batches mapped in verified DAG.`,
+      });
+    }
+
+    // Determine Risk Level Category
+    const clampedScore = Math.max(0, Math.min(100, riskScore));
+    let riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXPIRED' = 'LOW';
+    if (expiry.status === 'EXPIRED') {
+      riskLevel = 'EXPIRED';
+    } else if (clampedScore >= 70) {
+      riskLevel = 'HIGH';
+    } else if (clampedScore >= 35) {
+      riskLevel = 'MEDIUM';
+    }
+
+    const recommendations: string[] = [];
+    if (riskLevel === 'HIGH' || riskLevel === 'EXPIRED') {
+      recommendations.push('Do NOT dispense or distribute to retail channels');
+      recommendations.push('Enforce immediate physical segregation and quarantine');
+      recommendations.push('File regulatory inspection notice with State Food Safety Wing');
+    } else if (riskLevel === 'MEDIUM') {
+      recommendations.push('Prioritize rapid FIFO clearance at retail shelves');
+      recommendations.push('Perform secondary sensory and moisture dock inspection');
+    } else {
+      recommendations.push('Nominal quality verified: Approved for general distribution');
+      recommendations.push('Maintain verified solar-assisted cold chain integrity');
+    }
+
+    return {
+      riskLevel,
+      riskScore: clampedScore,
+      riskFactors,
+      storageAnomalyDetected: storageAnomaly,
+      recommendations,
+      isDeterministicFallback: true,
+      modelVersion: 'FARM-TRACER-AI-V2-RULE-ENGINE',
+    };
+  }
+
+  /**
+   * Run AI Analysis and persist results to Supabase public.ai_risk_analyses
+   */
+  public async analyzeBatchAndPersist(batch: Batch): Promise<AIRiskAnalysisRecord> {
+    const evaluation = this.evaluateBatchRisk(batch);
+    const analysisCode = `AIRA-${batch.batchId}-${Date.now().toString().slice(-4)}`;
+    const timestamp = new Date().toISOString();
+
+    try {
+      const { data, error } = await supabase
+        .from('ai_risk_analyses')
+        .insert({
+          analysis_code: analysisCode,
+          batch_code: batch.batchId,
+          risk_level: evaluation.riskLevel,
+          risk_score: evaluation.riskScore,
+          risk_factors: evaluation.riskFactors,
+          storage_anomaly_detected: evaluation.storageAnomalyDetected,
+          recommendations: evaluation.recommendations,
+          is_deterministic_fallback: evaluation.isDeterministicFallback,
+          model_version: evaluation.modelVersion,
+          analyzed_at: timestamp,
+        })
+        .select()
+        .single();
+
+      await supabase.from('audit_logs').insert({
+        action: 'AI_RISK_ANALYZED',
+        actor_name: 'FARM-TRACER AI Guard',
+        actor_role: 'SYSTEM',
+        entity_type: 'AI_ANALYSIS',
+        entity_id: batch.batchId,
+        details: { riskLevel: evaluation.riskLevel, riskScore: evaluation.riskScore },
+      });
+
+      if (data) {
+        this.notify();
+        return {
+          id: data.id,
+          analysisCode: data.analysis_code,
+          batchId: data.batch_id,
+          batchCode: data.batch_code,
+          riskLevel: data.risk_level,
+          riskScore: Number(data.risk_score),
+          riskFactors: data.risk_factors,
+          storageAnomalyDetected: data.storage_anomaly_detected,
+          recommendations: data.recommendations,
+          isDeterministicFallback: data.is_deterministic_fallback,
+          modelVersion: data.model_version,
+          analyzedAt: data.analyzed_at,
+          createdAt: data.created_at,
+        };
+      }
+    } catch (err) {
+      console.warn('Could not persist AI analysis to DB, using evaluation:', err);
+    }
+
+    return {
+      id: analysisCode,
+      analysisCode,
+      batchId: batch.batchId,
+      batchCode: batch.batchId,
+      riskLevel: evaluation.riskLevel,
+      riskScore: evaluation.riskScore,
+      riskFactors: evaluation.riskFactors,
+      storageAnomalyDetected: evaluation.storageAnomalyDetected,
+      recommendations: evaluation.recommendations,
+      isDeterministicFallback: evaluation.isDeterministicFallback,
+      modelVersion: evaluation.modelVersion,
+      analyzedAt: timestamp,
+      createdAt: timestamp,
+    };
+  }
+
+  /**
+   * Fetch stored AI Risk Analyses for a batch
+   */
+  public async getRiskAnalysesForBatch(batchId: string): Promise<AIRiskAnalysisRecord[]> {
+    try {
+      const { data, error } = await supabase
+        .from('ai_risk_analyses')
+        .select('*')
+        .eq('batch_code', batchId)
+        .order('analyzed_at', { ascending: false });
+
+      if (error || !data || data.length === 0) {
+        return [];
+      }
+
+      return data.map((a: any) => ({
+        id: a.id,
+        analysisCode: a.analysis_code,
+        batchId: a.batch_id,
+        batchCode: a.batch_code,
+        riskLevel: a.risk_level,
+        riskScore: Number(a.risk_score),
+        riskFactors: a.risk_factors || [],
+        storageAnomalyDetected: !!a.storage_anomaly_detected,
+        recommendations: a.recommendations || [],
+        isDeterministicFallback: !!a.is_deterministic_fallback,
+        modelVersion: a.model_version,
+        analyzedAt: a.analyzed_at,
+        createdAt: a.created_at,
+      }));
+    } catch (err) {
+      console.error('Error fetching AI risk analyses:', err);
+      return [];
+    }
   }
 
   public async getAIAnalysisForBatch(batchId: string): Promise<AIAnalysisRecord[]> {
-    const matched = this.records.filter((r) => r.batchId === batchId);
-    if (matched.length > 0) {
-      return matched;
+    try {
+      const dbAnalyses = await this.getRiskAnalysesForBatch(batchId);
+      if (dbAnalyses.length > 0) {
+        return dbAnalyses.map((a) => ({
+          id: a.analysisCode,
+          batchId: a.batchCode,
+          type:
+            a.riskLevel === 'HIGH'
+              ? 'CONTAMINATION_DETECTION'
+              : a.riskLevel === 'EXPIRED'
+              ? 'EXPIRY_RISK'
+              : 'STORAGE_EXCURSION_RISK',
+          title: `AI Risk Assessment: ${a.riskLevel} Risk Profile (${a.riskScore}/100)`,
+          result: a.recommendations[0] || 'Nominal status evaluated',
+          confidence: 0.94,
+          severity:
+            a.riskLevel === 'EXPIRED' || a.riskLevel === 'HIGH'
+              ? 'CRITICAL'
+              : a.riskLevel === 'MEDIUM'
+              ? 'MEDIUM'
+              : 'LOW',
+          explanation: a.riskFactors.map((rf) => `${rf.factor}: ${rf.detail}`).join('. '),
+          modelVersion: a.modelVersion,
+          timestamp: a.analyzedAt,
+          isDemoState: a.isDeterministicFallback,
+          recommendedAction: a.recommendations.join('; '),
+        }));
+      }
+    } catch (e) {
+      console.warn('Error querying DB AI analyses:', e);
     }
 
-    // Generate dynamic fallback AI record if not present
-    const genericRecord: AIAnalysisRecord = {
-      id: `AI-GEN-${batchId}`,
-      batchId,
-      type: 'ANOMALY_DETECTION',
-      title: 'Automated AI Integrity Inspection',
-      result: 'Standard Trace & Telemetry Patterns Within Normal Variance',
-      confidence: 0.93,
-      severity: 'LOW',
-      explanation: 'AI inference pipeline verified batch custody transfer intervals, environmental range limits, and digital signature validity. No suspicious anomalies detected.',
-      modelVersion: 'FarmTracer-IntegrityAI-v2.1',
-      timestamp: new Date().toISOString(),
-      isDemoState: true,
-      recommendedAction: 'Standard custodial workflow maintained.',
-    };
+    const initial = INITIAL_AI_RECORDS.filter((r) => r.batchId === batchId);
+    if (initial.length > 0) return initial;
 
-    return [genericRecord];
+    return INITIAL_AI_RECORDS.slice(0, 2);
   }
 
-  public async runAIDiagnosis(batchId: string): Promise<AIAnalysisRecord[]> {
-    // Simulate AI inference calculation
-    await new Promise((res) => setTimeout(res, 900));
-
-    const newRecord: AIAnalysisRecord = {
-      id: `AI-DIAG-${Date.now()}`,
-      batchId,
-      type: 'STORAGE_EXCURSION_RISK',
-      title: 'Live Edge-AI Micro-Climate & Shelf-Life Inference',
-      result: 'Storage Thermal Stability 99.1% · Zero Micro-Bacterial Growth Risk',
-      confidence: 0.95,
-      severity: 'LOW',
-      explanation: 'Model combined live solar battery reserves, external ambient heatwave index, and thermal insulation conductivity. Storage unit operating at peak energy efficiency with zero risk of cold-chain break.',
-      affectedStage: 'Active Cold Storage Unit',
-      modelVersion: 'FarmVision-EdgePredict-v3.2',
-      timestamp: new Date().toISOString(),
-      isDemoState: true,
-      recommendedAction: 'Maintain current solar storage setpoint at 21.0°C.',
-    };
-
-    this.records.unshift(newRecord);
-    this.saveToStorage();
-    this.notify();
-    return this.getAIAnalysisForBatch(batchId);
+  public async runAIDiagnosis(batchId: string): Promise<void> {
+    const { traceService } = await import('./traceService');
+    const batch = await traceService.getBatchById(batchId);
+    if (batch) {
+      await this.analyzeBatchAndPersist(batch);
+    }
   }
 
   public async getAllSafetyAlerts(): Promise<SafetyRiskAlert[]> {
-    return [...this.alerts];
+    return this.alerts;
   }
 
-  public async resolveAlert(alertId: string, resolutionNotes: string): Promise<void> {
-    this.alerts = this.alerts.map((a) => {
-      if (a.id === alertId) {
-        return {
-          ...a,
-          resolved: true,
-          resolutionNotes: resolutionNotes || 'Resolved by Food Safety Authority after verified re-inspection.',
-        };
-      }
-      return a;
-    });
-    this.saveToStorage();
-    this.notify();
-  }
-
-  public async createAlert(alertData: Omit<SafetyRiskAlert, 'id' | 'detectedAt' | 'resolved'>): Promise<SafetyRiskAlert> {
+  public async createAlert(alert: Omit<SafetyRiskAlert, 'id' | 'detectedAt' | 'resolved'>): Promise<SafetyRiskAlert> {
     const newAlert: SafetyRiskAlert = {
-      id: `ALERT-${Date.now()}`,
-      ...alertData,
+      ...alert,
+      id: `ALERT-RISK-${Date.now().toString().slice(-4)}`,
       detectedAt: new Date().toISOString(),
       resolved: false,
     };
     this.alerts.unshift(newAlert);
-    this.saveToStorage();
     this.notify();
     return newAlert;
+  }
+
+  public async resolveAlert(alertId: string, notes: string): Promise<void> {
+    const found = this.alerts.find((a) => a.id === alertId);
+    if (found) {
+      found.resolved = true;
+      found.resolutionNotes = notes;
+      this.notify();
+    }
+  }
+
+  public getRecordsForBatch(batchId: string): AIAnalysisRecord[] {
+    return INITIAL_AI_RECORDS.filter((r) => r.batchId === batchId);
+  }
+
+  public getAllRecords(): AIAnalysisRecord[] {
+    return INITIAL_AI_RECORDS;
+  }
+
+  public getAlerts(): SafetyRiskAlert[] {
+    return this.alerts;
   }
 }
 

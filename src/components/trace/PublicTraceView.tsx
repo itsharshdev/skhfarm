@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Batch, LineageNode } from '../../types';
+import React, { useState, useEffect } from 'react';
+import { Batch, LineageNode, LineageLink } from '../../types';
 import { ScoreRing } from '../common/ScoreRing';
 import { StatusBadge } from '../common/StatusBadge';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -53,10 +53,48 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
   const { setScannerOpen } = useAuthRole();
   const [activeTab, setActiveTab] = useState<'lineage' | 'timeline' | 'ai' | 'map' | 'certificates' | 'feedback'>('lineage');
 
+  // Dynamic Lineage Graph State
+  const [lineageGraph, setLineageGraph] = useState<{ nodes: LineageNode[]; links: LineageLink[] }>({
+    nodes: DEMO_LINEAGE_NODES,
+    links: DEMO_LINEAGE_LINKS,
+  });
+
   // Selected node for slide-over drawer
   const [selectedNode, setSelectedNode] = useState<LineageNode | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+
+  // Sync sub-tab from URL hash on mount & hashchange
+  useEffect(() => {
+    const handleSubtabHash = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '');
+      if (hash.startsWith('trace/')) {
+        const parts = hash.split('/');
+        const subtab = parts[2];
+        if (subtab && ['lineage', 'timeline', 'ai', 'map', 'certificates', 'feedback'].includes(subtab)) {
+          setActiveTab(subtab as any);
+        }
+      }
+    };
+
+    handleSubtabHash();
+    window.addEventListener('hashchange', handleSubtabHash);
+    return () => window.removeEventListener('hashchange', handleSubtabHash);
+  }, []);
+
+  // Fetch dynamic lineage graph on batchId change
+  useEffect(() => {
+    traceService.getBatchLineageGraph(batch.batchId).then((g) => {
+      if (g && g.nodes && g.nodes.length > 0) {
+        setLineageGraph(g);
+      }
+    });
+  }, [batch.batchId]);
+
+  const handleTabChange = (tab: 'lineage' | 'timeline' | 'ai' | 'map' | 'certificates' | 'feedback') => {
+    setActiveTab(tab);
+    window.location.hash = `#trace/${batch.batchId}/${tab}`;
+  };
 
   // Consumer Feedback form state
   const [feedbackCategory, setFeedbackCategory] = useState<'QUALITY' | 'ACCURACY' | 'PACKAGING' | 'HANDLING' | 'TRACEABILITY' | 'OVERALL'>('OVERALL');
@@ -78,12 +116,15 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
   };
 
   const handleNodeClick = (nodeId: string, nodeBatchId?: string) => {
-    const foundNode = DEMO_LINEAGE_NODES.find((n) => n.id === nodeId) || null;
+    const foundNode =
+      lineageGraph.nodes.find((n) => n.id === nodeId) ||
+      DEMO_LINEAGE_NODES.find((n) => n.id === nodeId) ||
+      null;
     setSelectedNode(foundNode);
     setIsDrawerOpen(true);
   };
 
-  const isMultiParent = batch.batchId === 'BIS-2026-092';
+  const isMultiParent = batch.batchId === 'BIS-2026-092' || (batch.parentBatchIds && batch.parentBatchIds.length > 1);
   const isContaminated = !!batch.contaminationFlag?.flagged || batch.status === 'RECALLED';
 
   return (
@@ -260,7 +301,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
           <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-xl">
             <button
               id="tab-btn-lineage"
-              onClick={() => setActiveTab('lineage')}
+              onClick={() => handleTabChange('lineage')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'lineage'
                   ? 'bg-white text-emerald-800 shadow-2xs'
@@ -273,7 +314,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 
             <button
               id="tab-btn-timeline"
-              onClick={() => setActiveTab('timeline')}
+              onClick={() => handleTabChange('timeline')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'timeline'
                   ? 'bg-white text-emerald-800 shadow-2xs'
@@ -286,7 +327,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 
             <button
               id="tab-btn-ai"
-              onClick={() => setActiveTab('ai')}
+              onClick={() => handleTabChange('ai')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'ai'
                   ? 'bg-purple-600 text-white shadow-2xs'
@@ -299,7 +340,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 
             <button
               id="tab-btn-map"
-              onClick={() => setActiveTab('map')}
+              onClick={() => handleTabChange('map')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'map'
                   ? 'bg-white text-emerald-800 shadow-2xs'
@@ -312,7 +353,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 
             <button
               id="tab-btn-certificates"
-              onClick={() => setActiveTab('certificates')}
+              onClick={() => handleTabChange('certificates')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'certificates'
                   ? 'bg-white text-emerald-800 shadow-2xs'
@@ -325,7 +366,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 
             <button
               id="tab-btn-feedback"
-              onClick={() => setActiveTab('feedback')}
+              onClick={() => handleTabChange('feedback')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                 activeTab === 'feedback'
                   ? 'bg-white text-emerald-800 shadow-2xs'
@@ -342,6 +383,8 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
         {activeTab === 'lineage' && (
           <LineageDAGGraph
             batch={batch}
+            customNodes={lineageGraph.nodes}
+            customLinks={lineageGraph.links}
             selectedNodeId={selectedNode?.id}
             onSelectNode={(nodeId, nodeBatchId) => handleNodeClick(nodeId, nodeBatchId)}
             onSelectBatch={(bId) => {

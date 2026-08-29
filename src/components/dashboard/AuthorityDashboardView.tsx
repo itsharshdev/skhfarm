@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Batch, AppUser, VerificationState } from '../../types';
 import { traceService } from '../../services/traceService';
+import { alertService } from '../../services/alertService';
 import { StatusBadge } from '../common/StatusBadge';
 import { RiskAlertCenter } from '../safety/RiskAlertCenter';
 import {
@@ -69,13 +70,37 @@ export const AuthorityDashboardView: React.FC<AuthorityDashboardViewProps> = ({
     if (!auditBatch) return;
     setIsAuditing(true);
     try {
+      const notes = auditNotes || `Official Regulatory Audit executed by ${user.name}. Marked as ${auditDecision}.`;
       await traceService.verifyBatchAsAuthority(
         auditBatch.batchId,
         user.name,
         auditDecision,
-        auditNotes || `Official Regulatory Audit executed by ${user.name}. Marked as ${auditDecision}.`,
+        notes,
         contaminationSeverity
       );
+
+      if (auditDecision === 'REJECTED') {
+        await alertService.createRecall({
+          batchCode: auditBatch.batchId,
+          productName: auditBatch.productName,
+          quantity: `${auditBatch.quantity} ${auditBatch.unit}`,
+          reason: notes,
+          severity: contaminationSeverity,
+          initiatedByName: user.name,
+          initiatedByRole: 'AUTHORITY',
+          actionRequired: 'Quarantine and immediate retail recall enforcement.',
+        });
+      } else if (auditDecision === 'FLAGGED') {
+        await alertService.createAlert({
+          targetRole: 'RETAILER',
+          batchCode: auditBatch.batchId,
+          type: 'CONTAMINATION',
+          severity: contaminationSeverity === 'CRITICAL' ? 'CRITICAL' : 'WARNING',
+          title: `Inspection Flag: ${auditBatch.productName}`,
+          message: `Batch ${auditBatch.batchId} flagged during regulatory audit. ${notes}`,
+        });
+      }
+
       setAuditBatch(null);
       setAuditNotes('');
       loadData();

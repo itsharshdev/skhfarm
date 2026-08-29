@@ -37,10 +37,35 @@ function AppContent() {
 
   // Switch to dashboard view automatically when user logs in with a specific role
   useEffect(() => {
-    if (isAuthenticated && currentUser) {
+    if (isAuthenticated && currentUser && activeView !== 'trace') {
       setActiveView('dashboard');
     }
   }, [currentUser?.role, isAuthenticated]);
+
+  // Synchronize URL hash with router state
+  useEffect(() => {
+    const syncFromHash = () => {
+      const hash = window.location.hash.replace(/^#\/?/, '');
+      if (hash.startsWith('trace/')) {
+        const parts = hash.split('/');
+        const bId = parts[1];
+        if (bId) {
+          setActiveBatchId(bId);
+        }
+        setActiveView('trace');
+      } else if (hash === 'batches') {
+        setActiveView('batches');
+      } else if (hash === 'dashboard') {
+        setActiveView('dashboard');
+      } else if (hash === 'landing' || hash === '') {
+        setActiveView('landing');
+      }
+    };
+
+    syncFromHash();
+    window.addEventListener('hashchange', syncFromHash);
+    return () => window.removeEventListener('hashchange', syncFromHash);
+  }, []);
 
   useEffect(() => {
     loadBatch(activeBatchId);
@@ -68,6 +93,7 @@ function AppContent() {
   const handleSelectBatch = (batchId: string) => {
     setActiveBatchId(batchId);
     setActiveView('trace');
+    window.location.hash = `#trace/${batchId}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -162,10 +188,10 @@ function AppContent() {
             {currentUser.role === 'WAREHOUSE' && (
               <WarehouseDashboardView user={currentUser} onSelectBatch={handleSelectBatch} />
             )}
-            {currentUser.role === 'PROCESSOR' && (
+            {(currentUser.role === 'PROCESSOR' || currentUser.role === 'FACTORY' || currentUser.role === 'MANUFACTURER') && (
               <ProcessorDashboardView user={currentUser} onSelectBatch={handleSelectBatch} />
             )}
-            {currentUser.role === 'TRANSPORTER' && (
+            {(currentUser.role === 'TRANSPORTER' || currentUser.role === 'DISTRIBUTOR') && (
               <TransporterDashboardView user={currentUser} onSelectBatch={handleSelectBatch} />
             )}
             {currentUser.role === 'RETAILER' && (

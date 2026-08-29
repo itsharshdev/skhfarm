@@ -4,11 +4,15 @@ export type StakeholderRole =
   | 'TRANSPORTER'
   | 'WAREHOUSE'
   | 'PROCESSOR'
+  | 'MANUFACTURER'
+  | 'FACTORY'
+  | 'DISTRIBUTOR'
   | 'RETAILER'
   | 'AUTHORITY'
   | 'ADMIN'
   | 'CONSUMER'
   | 'CUSTOM';
+
 
 export type EventType =
   | 'CREATED'
@@ -360,3 +364,54 @@ export interface SafetyRiskAlert {
   resolved: boolean;
   resolutionNotes?: string;
 }
+
+export type ExpiryState = 'NORMAL' | 'NEAR_EXPIRY' | 'EXPIRED';
+
+export interface RecallRecord {
+  id: string;
+  recallCode: string;
+  batchId: string;
+  batchCode: string;
+  reason: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+  status: 'INITIATED' | 'ACTIVE' | 'RESOLVED' | 'CLOSED';
+  initiatedByName: string;
+  initiatedByRole: string;
+  affectedProductName: string;
+  affectedQuantity: string;
+  actionRequired?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertRecord {
+  id: string;
+  alertCode: string;
+  userId?: string;
+  targetRole?: string;
+  batchId: string;
+  batchCode: string;
+  type: 'NEAR_EXPIRY' | 'EXPIRED' | 'HIGH_RISK' | 'CONTAMINATION' | 'RECALL' | 'COMPLIANCE' | 'ANOMALY';
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdAt: string;
+}
+
+export interface AIRiskAnalysisRecord {
+  id: string;
+  analysisCode: string;
+  batchId: string;
+  batchCode: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'EXPIRED';
+  riskScore: number;
+  riskFactors: Array<{ factor: string; impact: string; detail: string }>;
+  storageAnomalyDetected: boolean;
+  recommendations: string[];
+  isDeterministicFallback: boolean;
+  modelVersion: string;
+  analyzedAt: string;
+  createdAt: string;
+}
+
