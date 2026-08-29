@@ -1,0 +1,11 @@
+{
+  "name": "Farm Tracer - Food Traceability & Cold-Chain",
+  "description": "Digital food traceability and cold-chain monitoring platform connecting farm origin, smart solar storage, processing lineage, and consumer trust.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
