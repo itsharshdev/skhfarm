@@ -208,6 +208,20 @@ export class AuthService {
   }
 
   /**
+   * Send password recovery email via Supabase Auth
+   */
+  public async resetPassword(email: string): Promise<{ error: Error | null }> {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      });
+      return { error: error || null };
+    } catch (err: any) {
+      return { error: err };
+    }
+  }
+
+  /**
    * Fetch all registered organizations for dropdown select
    */
   public async fetchOrganizations(): Promise<OrganizationOption[]> {

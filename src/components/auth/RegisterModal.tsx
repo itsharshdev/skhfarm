@@ -14,7 +14,26 @@ import {
   KeyRound,
   AlertCircle,
   Loader2,
+  Tractor,
+  Store,
+  Warehouse,
+  Factory,
+  Truck,
+  ShoppingBag,
+  ShieldAlert,
+  ArrowRight,
+  Sparkles,
 } from 'lucide-react';
+
+const REGISTRATION_ROLES: { role: StakeholderRole; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { role: 'FARMER', label: 'Farmer / FPO Origin', icon: Tractor },
+  { role: 'MANDI', label: 'Mandi / APMC Collection Hub', icon: Store },
+  { role: 'WAREHOUSE', label: 'Solar Cold Storage Vault', icon: Warehouse },
+  { role: 'PROCESSOR', label: 'Processor / Flour Mill', icon: Factory },
+  { role: 'TRANSPORTER', label: 'Reefer Logistics Carrier', icon: Truck },
+  { role: 'RETAILER', label: 'Retailer / Superstore', icon: ShoppingBag },
+  { role: 'AUTHORITY', label: 'Food Safety Inspector', icon: ShieldAlert },
+];
 
 export const RegisterModal: React.FC = () => {
   const { isRegisterModalOpen, setRegisterModalOpen, registerUser, setLoginModalOpen } = useAuthRole();
@@ -26,6 +45,7 @@ export const RegisterModal: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [location, setLocation] = useState('');
+  const [complianceConsent, setComplianceConsent] = useState(true);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [organizations, setOrganizations] = useState<OrganizationOption[]>([]);
@@ -46,11 +66,15 @@ export const RegisterModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password || !contactName) {
-      setErrorMessage('Please fill in all required fields.');
+      setErrorMessage('Please fill in your full name, work email, and password.');
       return;
     }
     if (password.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+    if (orgMode === 'new' && !newOrgName.trim()) {
+      setErrorMessage('Please provide your organization or facility name.');
       return;
     }
 
@@ -65,7 +89,7 @@ export const RegisterModal: React.FC = () => {
         role,
         organizationId: orgMode === 'existing' ? selectedOrgId : undefined,
         newOrganizationName: orgMode === 'new' ? newOrgName : undefined,
-        location,
+        location: location || 'Maharashtra, India',
         language: 'en',
       });
 
@@ -73,7 +97,7 @@ export const RegisterModal: React.FC = () => {
         setErrorMessage(res.error || 'Failed to register account.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Registration error');
+      setErrorMessage(err.message || 'Registration error occurred.');
     } finally {
       setLoading(false);
     }
@@ -82,227 +106,267 @@ export const RegisterModal: React.FC = () => {
   return (
     <div
       id="stakeholder-register-modal"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fadeIn"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="register-modal-title"
     >
-      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80">
+      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/90">
           <div className="flex items-center gap-3">
             <FarmTracerLogo variant="icon-only" size="sm" />
             <div>
-              <h3 className="font-bold text-slate-900 text-lg font-['Space_Grotesk',sans-serif]">Register Stakeholder</h3>
-              <p className="text-xs text-slate-500">Live Supabase Registration & Profile Association</p>
+              <h3 id="register-modal-title" className="font-bold text-slate-900 text-lg font-['Space_Grotesk',sans-serif]">
+                Register Supply Chain Entity
+              </h3>
+              <p className="text-xs text-slate-500">
+                Join the FarmTracer Verified Traceability Network
+              </p>
             </div>
           </div>
           <button
             id="close-register-modal-btn"
             onClick={() => setRegisterModalOpen(false)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+            title="Close Modal"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Error / Notice banner */}
-        {errorMessage && (
+        {/* Notice / Error Banner */}
+        {errorMessage ? (
           <div className="px-6 py-2.5 bg-rose-50 border-b border-rose-200 text-xs text-rose-800 flex items-center gap-2 animate-fadeIn">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
             <span>{errorMessage}</span>
           </div>
+        ) : (
+          <div className="px-6 py-2 bg-emerald-50/70 border-b border-emerald-100 text-xs text-emerald-900 flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Enterprise Onboarding:</strong> Creates verified profile tied to certified supply chain node.
+            </span>
+          </div>
         )}
 
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+        {/* Scrollable Form Content */}
+        <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-5 max-h-[calc(92vh-160px)]">
+          {/* Section 1: Role Selection */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              Supply Chain Role
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+              1. Select Supply Chain Operational Role
             </label>
-            <select
-              id="register-role-select"
-              value={role}
-              onChange={(e) => setRole(e.target.value as StakeholderRole)}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-            >
-              <option value="FARMER">Farmer / FPO Origin</option>
-              <option value="MANDI">Mandi / Collection Hub</option>
-              <option value="WAREHOUSE">Solar Smart Storage / Cold Vault</option>
-              <option value="TRANSPORTER">Logistics / Transporter</option>
-              <option value="PROCESSOR">Processor / Mill / Factory</option>
-              <option value="RETAILER">Retailer / Superstore</option>
-              <option value="AUTHORITY">Food Safety Regulator</option>
-              <option value="ADMIN">Platform Admin</option>
-            </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {REGISTRATION_ROLES.map((r) => {
+                const Icon = r.icon;
+                const isSelected = role === r.role;
+                return (
+                  <button
+                    key={r.role}
+                    type="button"
+                    onClick={() => setRole(r.role)}
+                    className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all ${
+                      isSelected
+                        ? 'bg-emerald-50 border-emerald-500 ring-2 ring-emerald-500/30 text-emerald-900 shadow-2xs font-bold'
+                        : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span className={`p-2 rounded-xl border ${isSelected ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-500 border-slate-200'}`}>
+                      <Icon className="w-4 h-4" />
+                    </span>
+                    <span className="text-xs">{r.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Organization Association */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
+          {/* Section 2: Organization Association */}
+          <div className="space-y-3 pt-1">
+            <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Organization / Facility
+                2. Organization / Facility Details
               </label>
-              <div className="flex items-center gap-2 text-xs">
+              <div className="flex bg-slate-100 p-0.5 rounded-lg text-[11px]">
                 <button
                   type="button"
                   onClick={() => setOrgMode('existing')}
-                  className={`font-semibold ${
-                    orgMode === 'existing' ? 'text-emerald-700 underline' : 'text-slate-500'
+                  className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                    orgMode === 'existing' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-500'
                   }`}
                 >
                   Join Existing
                 </button>
-                <span className="text-slate-300">|</span>
                 <button
                   type="button"
                   onClick={() => setOrgMode('new')}
-                  className={`font-semibold ${
-                    orgMode === 'new' ? 'text-emerald-700 underline' : 'text-slate-500'
+                  className={`px-2.5 py-1 rounded-md font-bold transition-all ${
+                    orgMode === 'new' ? 'bg-white text-emerald-800 shadow-2xs' : 'text-slate-500'
                   }`}
                 >
-                  Create New
+                  Register New
                 </button>
               </div>
             </div>
 
             {orgMode === 'existing' ? (
-              <select
-                id="register-org-select"
-                value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-              >
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name} ({org.type} - {org.city || 'MH'})
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                >
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} ({org.city ? `${org.city}, ${org.state}` : org.type})
+                    </option>
+                  ))}
+                </select>
+              </div>
             ) : (
               <div className="relative">
-                <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                <Building2 className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input
-                  id="register-org-input"
                   type="text"
-                  required
-                  placeholder="e.g. Sahyadri Organic Farmer Producer Co."
                   value={newOrgName}
                   onChange={(e) => setNewOrgName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                  placeholder="e.g. Sahyadri Agro Farmers Co-op"
+                  className="w-full pl-10 pr-3 py-2.5 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  id="register-contact-input"
-                  type="text"
-                  required
-                  placeholder="Ramesh Patil"
-                  value={contactName}
-                  onChange={(e) => setContactName(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
+          {/* Section 3: Contact & Account Credentials */}
+          <div className="space-y-3 pt-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+              3. Custodian & Account Credentials
+            </label>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Full Name / Authorized Signatory
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                  <input
+                    type="text"
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    placeholder="e.g. Anand Deshmukh"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Operating Location (City, State)
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Nashik, Maharashtra"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Work Email
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  id="register-email-input"
-                  type="email"
-                  required
-                  placeholder="user@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Work Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="anand@sahyadriagro.in"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                  Create Password (Min 6 chars)
+                </label>
+                <div className="relative">
+                  <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-2.5" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-10 pr-3 py-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  id="register-password-input"
-                  type="password"
-                  required
-                  minLength={6}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Operating Location
-              </label>
-              <div className="relative">
-                <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  id="register-location-input"
-                  type="text"
-                  placeholder="Kopargaon, Maharashtra"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
-            </div>
+          {/* Compliance & Consent Declaration */}
+          <div className="pt-2">
+            <label className="flex items-start gap-2.5 cursor-pointer text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={complianceConsent}
+                onChange={(e) => setComplianceConsent(e.target.checked)}
+                className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+              />
+              <span>
+                I agree to submit verifiable farm/facility telemetry, temperature logs, and photographic evidence for custody transfers under the FarmTracer 100-pt Integrity model.
+              </span>
+            </label>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-start gap-2">
-            <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-            <span>
-              Real registration writes to Supabase Auth & public profiles, enforcing secure role-based Row Level Security.
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => {
-                setRegisterModalOpen(false);
-                setLoginModalOpen(true);
-              }}
-              className="text-xs text-slate-600 hover:text-slate-900 font-semibold"
-            >
-              Existing account? Sign In
-            </button>
-            <button
-              id="submit-register-btn"
-              type="submit"
-              disabled={loading}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs md:text-sm font-bold transition-all shadow-sm flex items-center gap-1.5 disabled:opacity-60"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Registering...</span>
-                </>
-              ) : (
-                <span>Complete Registration</span>
-              )}
-            </button>
-          </div>
+          {/* Submit Registration Button */}
+          <button
+            id="submit-register-btn"
+            type="submit"
+            disabled={loading || !complianceConsent}
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2 mt-4 active:scale-95 disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Registering Stakeholder Account...</span>
+              </>
+            ) : (
+              <>
+                <span>Complete Registration & Open Dashboard</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
         </form>
+
+        {/* Modal Footer Navigation */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs">
+          <span className="text-slate-500">
+            Already have a registered account or want to use a demo persona?
+          </span>
+          <button
+            id="switch-to-login-btn"
+            type="button"
+            onClick={() => {
+              setRegisterModalOpen(false);
+              setLoginModalOpen(true);
+            }}
+            className="text-emerald-700 font-bold hover:text-emerald-800 underline"
+          >
+            Sign In to Existing Account →
+          </button>
+        </div>
       </div>
     </div>
   );
