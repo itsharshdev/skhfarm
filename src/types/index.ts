@@ -192,6 +192,7 @@ export interface Batch {
   currentLocation: string;
   status: 'ACTIVE' | 'STORED' | 'IN_TRANSIT' | 'TRANSFORMED' | 'RETAILED' | 'RECALLED';
   createdAt: string;
+  updatedAt?: string;
   harvestDate?: string;
   productionDate?: string;
   expiryDate: string;
