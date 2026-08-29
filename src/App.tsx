@@ -24,28 +24,74 @@ import { SplashScreen } from './components/brand/SplashScreen';
 import { PageLoading } from './components/common/LoadingStates';
 import { traceService } from './services/traceService';
 import { Batch } from './types';
+import { DataIntegrityBanner } from './components/integrity/DataIntegrityBanner';
+import { DataRecoveryHubModal } from './components/integrity/DataRecoveryHubModal';
 import { AlertCircle, ArrowLeft, Layers, ShieldCheck, User, QrCode, Sparkles } from 'lucide-react';
 
 export type AppViewMode = 'landing' | 'trace' | 'batches' | 'dashboard';
+
+const STORAGE_ACTIVE_VIEW_KEY = 'farmtracer_active_view';
+const STORAGE_ACTIVE_BATCH_KEY = 'farmtracer_active_batch_id';
 
 function AppContent() {
   const { activeBatchId, setActiveBatchId, setScannerOpen, currentUser, isAuthenticated, setLoginModalOpen } =
     useAuthRole();
   const [showSplash, setShowSplash] = useState(true);
-  const [activeView, setActiveView] = useState<AppViewMode>('landing');
+  
+  // Restore initial view from URL hash or localStorage
+  const [activeView, setActiveView] = useState<AppViewMode>(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#\/?/, '') : '';
+    if (hash.startsWith('trace/')) return 'trace';
+    if (hash === 'batches') return 'batches';
+    if (hash === 'dashboard') return 'dashboard';
+    if (hash === 'landing') return 'landing';
+
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_ACTIVE_VIEW_KEY) : null;
+    if (saved === 'dashboard' || saved === 'batches' || saved === 'trace') {
+      return saved as AppViewMode;
+    }
+    const savedUser = typeof localStorage !== 'undefined' ? localStorage.getItem('farmtracer_user') : null;
+    if (savedUser) return 'dashboard';
+    return 'landing';
+  });
+
   const [currentBatch, setCurrentBatch] = useState<Batch | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorNotFound, setErrorNotFound] = useState<string | null>(null);
   const [isOfflineDrawerOpen, setIsOfflineDrawerOpen] = useState(false);
+  const [isRecoveryHubOpen, setIsRecoveryHubOpen] = useState(false);
+
+  // Synchronize router state with URL hash and localStorage
+  const navigateToView = (view: AppViewMode, batchId?: string) => {
+    setActiveView(view);
+    try {
+      localStorage.setItem(STORAGE_ACTIVE_VIEW_KEY, view);
+    } catch (e) {}
+
+    if (view === 'trace') {
+      const bId = batchId || activeBatchId || 'BIS-2026-092';
+      setActiveBatchId(bId);
+      try {
+        localStorage.setItem(STORAGE_ACTIVE_BATCH_KEY, bId);
+      } catch (e) {}
+      window.location.hash = `#trace/${bId}`;
+    } else if (view === 'dashboard') {
+      window.location.hash = '#dashboard';
+    } else if (view === 'batches') {
+      window.location.hash = '#batches';
+    } else {
+      window.location.hash = '#landing';
+    }
+  };
 
   // Switch to dashboard view automatically when user logs in with a specific role
   useEffect(() => {
     if (isAuthenticated && currentUser && activeView !== 'trace') {
-      setActiveView('dashboard');
+      navigateToView('dashboard');
     }
   }, [currentUser?.role, isAuthenticated]);
 
-  // Synchronize URL hash with router state
+  // Synchronize URL hash with router state on initial boot and popstate
   useEffect(() => {
     const syncFromHash = () => {
       const hash = window.location.hash.replace(/^#\/?/, '');
@@ -54,14 +100,20 @@ function AppContent() {
         const bId = parts[1];
         if (bId) {
           setActiveBatchId(bId);
+          try {
+            localStorage.setItem(STORAGE_ACTIVE_BATCH_KEY, bId);
+          } catch (e) {}
         }
         setActiveView('trace');
       } else if (hash === 'batches') {
         setActiveView('batches');
       } else if (hash === 'dashboard') {
         setActiveView('dashboard');
-      } else if (hash === 'landing' || hash === '') {
+      } else if (hash === 'landing') {
         setActiveView('landing');
+      } else if (hash === '') {
+        const savedView = (localStorage.getItem(STORAGE_ACTIVE_VIEW_KEY) as AppViewMode) || (isAuthenticated ? 'dashboard' : 'landing');
+        navigateToView(savedView);
       }
     };
 
@@ -71,7 +123,9 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    loadBatch(activeBatchId);
+    if (activeBatchId) {
+      loadBatch(activeBatchId);
+    }
   }, [activeBatchId]);
 
   const loadBatch = async (batchId: string) => {
@@ -94,9 +148,7 @@ function AppContent() {
   };
 
   const handleSelectBatch = (batchId: string) => {
-    setActiveBatchId(batchId);
-    setActiveView('trace');
-    window.location.hash = `#trace/${batchId}`;
+    navigateToView('trace', batchId);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -106,77 +158,67 @@ function AppContent() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-['Plus_Jakarta_Sans',sans-serif]">
-      {/* Top Navigation */}
-      <Navbar
-        onSearchBatch={handleSearchBatch}
-        onNavigateHome={() => {
-          setActiveView('landing');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        onOpenOfflineSync={() => setIsOfflineDrawerOpen(true)}
-      />
+      {/* Top Header Group (Sticky without internal overlaps) */}
+      <div className="sticky top-0 z-40 w-full flex flex-col bg-white shadow-2xs">
+        <Navbar
+          onSearchBatch={handleSearchBatch}
+          onNavigateHome={() => navigateToView('landing')}
+          onOpenOfflineSync={() => setIsOfflineDrawerOpen(true)}
+        />
+        {/* PS-1 Data Integrity & Incident Banner */}
+        <DataIntegrityBanner onOpenRecoveryDetails={() => setIsRecoveryHubOpen(true)} />
+      </div>
 
-      {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-        {/* Navigation Bar / View Switcher */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-2">
-            {activeView !== 'landing' && (
-              <button
-                id="back-overview-btn"
-                onClick={() => setActiveView('landing')}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:text-emerald-700 hover:bg-slate-50 transition-colors shadow-2xs"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Overview</span>
-              </button>
-            )}
+      {/* Main App Workspaces View Port */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+        {/* Navigation Breadcrumb & Back Bar (When not on Landing) */}
+        {activeView !== 'landing' && (
+          <div className="flex items-center justify-between pb-6 mb-6 border-b border-slate-200/80">
+            <button
+              onClick={() => navigateToView(isAuthenticated ? 'dashboard' : 'landing')}
+              className="inline-flex items-center gap-2 text-xs md:text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors bg-white px-3.5 py-1.5 rounded-xl border border-slate-200 shadow-2xs"
+            >
+              <ArrowLeft className="w-4 h-4 text-slate-500" />
+              <span>Back to {isAuthenticated ? 'Workspace' : 'Home'}</span>
+            </button>
 
-            {isAuthenticated && currentUser && (
+            <div className="flex items-center gap-2">
               <button
-                id="workspace-tab-btn"
-                onClick={() => setActiveView('dashboard')}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs ${
-                  activeView === 'dashboard'
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                onClick={() => navigateToView('batches')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                  activeView === 'batches'
+                    ? 'bg-slate-900 text-white border-slate-900 shadow-2xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                <User className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{currentUser.role} Workspace</span>
+                Sample Batches
               </button>
-            )}
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              id="active-trace-tab-btn"
-              onClick={() => setActiveView('trace')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeView === 'trace'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Active Trace
-            </button>
-
-            <button
-              id="batch-registry-tab-btn"
-              onClick={() => setActiveView('batches')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                activeView === 'batches'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              Batch Registry
-            </button>
+              {isAuthenticated && (
+                <button
+                  onClick={() => navigateToView('dashboard')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                    activeView === 'dashboard'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  My Workspace
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* View Routing */}
-        {activeView === 'landing' && <LandingPage onSelectBatch={handleSelectBatch} />}
+        {activeView === 'landing' && (
+          <LandingPage
+            onSelectBatch={handleSelectBatch}
+            onOpenScanner={() => setScannerOpen(true)}
+            onOpenStakeholderLogin={() => setLoginModalOpen(true)}
+            onViewAllBatches={() => navigateToView('batches')}
+          />
+        )}
 
         {activeView === 'batches' && <DemoBatchesListView onSelectBatch={handleSelectBatch} />}
 
@@ -261,6 +303,11 @@ function AppContent() {
         isOpen={isOfflineDrawerOpen}
         onClose={() => setIsOfflineDrawerOpen(false)}
       />
+      <DataRecoveryHubModal
+        isOpen={isRecoveryHubOpen}
+        onClose={() => setIsRecoveryHubOpen(false)}
+        onInspectBatch={handleSelectBatch}
+      />
 
       {/* Footer */}
       <Footer onSelectBatch={handleSelectBatch} />
@@ -268,7 +315,7 @@ function AppContent() {
       {/* Mobile Bottom Navigation Bar */}
       <MobileNav
         activeView={activeView as any}
-        setActiveView={(v) => setActiveView(v as AppViewMode)}
+        setActiveView={(v) => navigateToView(v as AppViewMode)}
       />
     </div>
   );

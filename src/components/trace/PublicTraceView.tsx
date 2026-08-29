@@ -26,6 +26,7 @@ import {
   Star,
   Info,
   ShieldAlert,
+  ShieldCheck,
   Flame,
   Sun,
 } from 'lucide-react';
@@ -38,7 +39,10 @@ import { MultiParentLineageCard } from './MultiParentLineageCard';
 import { SupplyChainRouteMap } from './SupplyChainRouteMap';
 import { EventTimelineView } from './EventTimelineView';
 import { BatchDetailDrawer } from './BatchDetailDrawer';
+import { RecordIntegrityBadge } from '../integrity/RecordIntegrityBadge';
+import { dataIntegrityService } from '../../services/dataIntegrityService';
 import { AIInsightsPanel } from '../ai/AIInsightsPanel';
+import { ClaimVerificationPanel } from '../verification/ClaimVerificationPanel';
 import { BatchQRModal } from '../operations/BatchQRModal';
 
 interface PublicTraceViewProps {
@@ -52,7 +56,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
 }) => {
   const { t } = useLanguage();
   const { setScannerOpen } = useAuthRole();
-  const [activeTab, setActiveTab] = useState<'lineage' | 'timeline' | 'ai' | 'map' | 'certificates' | 'feedback'>('lineage');
+  const [activeTab, setActiveTab] = useState<'lineage' | 'timeline' | 'verification' | 'ai' | 'map' | 'certificates' | 'feedback'>('lineage');
 
   // Dynamic Lineage Graph State
   const [lineageGraph, setLineageGraph] = useState<{ nodes: LineageNode[]; links: LineageLink[] }>({
@@ -73,7 +77,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
       if (hash.startsWith('trace/')) {
         const parts = hash.split('/');
         const subtab = parts[2];
-        if (subtab && ['lineage', 'timeline', 'ai', 'map', 'certificates', 'feedback'].includes(subtab)) {
+        if (subtab && ['lineage', 'timeline', 'verification', 'ai', 'map', 'certificates', 'feedback'].includes(subtab)) {
           setActiveTab(subtab as any);
         }
       }
@@ -93,7 +97,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
     });
   }, [batch.batchId]);
 
-  const handleTabChange = (tab: 'lineage' | 'timeline' | 'ai' | 'map' | 'certificates' | 'feedback') => {
+  const handleTabChange = (tab: 'lineage' | 'timeline' | 'verification' | 'ai' | 'map' | 'certificates' | 'feedback') => {
     setActiveTab(tab);
     window.location.hash = `#trace/${batch.batchId}/${tab}`;
   };
@@ -194,6 +198,7 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
                 BATCH #{batch.batchId}
               </span>
               <StatusBadge status={batch.status} size="sm" />
+              <RecordIntegrityBadge status={dataIntegrityService.getBatchIntegrityStatus(batch.batchId)} size="sm" />
               <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-medium flex items-center gap-1">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                 {batch.events.length} Verified Handoffs
@@ -344,6 +349,19 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
             </button>
 
             <button
+              id="tab-btn-verification"
+              onClick={() => handleTabChange('verification')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'verification'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-emerald-700 hover:bg-emerald-50'
+              }`}
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Evidence & Verification</span>
+            </button>
+
+            <button
               id="tab-btn-ai"
               onClick={() => handleTabChange('ai')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
@@ -424,6 +442,18 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
                 setIsDrawerOpen(true);
               }
             }}
+          />
+        )}
+
+        {/* TAB 2.2: PS-2 EVIDENCE & CLAIM VERIFICATION */}
+        {activeTab === 'verification' && (
+          <ClaimVerificationPanel
+            batch={batch}
+            onSelectEvent={(eId) => {
+              setSelectedEventId(eId);
+              setActiveTab('timeline');
+            }}
+            onInspectTrace={() => setActiveTab('timeline')}
           />
         )}
 

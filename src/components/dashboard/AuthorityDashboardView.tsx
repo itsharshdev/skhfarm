@@ -4,6 +4,7 @@ import { traceService } from '../../services/traceService';
 import { alertService } from '../../services/alertService';
 import { StatusBadge } from '../common/StatusBadge';
 import { RiskAlertCenter } from '../safety/RiskAlertCenter';
+import { DataRecoveryHubModal } from '../integrity/DataRecoveryHubModal';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -19,6 +20,7 @@ import {
   RefreshCw,
   BellRing,
   Layers,
+  Database,
 } from 'lucide-react';
 
 interface AuthorityDashboardViewProps {
@@ -35,6 +37,7 @@ export const AuthorityDashboardView: React.FC<AuthorityDashboardViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [filterState, setFilterState] = useState<'ALL' | 'VERIFIED' | 'FLAGGED' | 'RECALLED'>('ALL');
   const [activeAuthorityTab, setActiveAuthorityTab] = useState<'batches' | 'risk_center'>('batches');
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
 
   // Audit Modal
   const [auditBatch, setAuditBatch] = useState<Batch | null>(null);
@@ -189,6 +192,14 @@ export const AuthorityDashboardView: React.FC<AuthorityDashboardViewProps> = ({
         >
           <ShieldAlert className="w-4 h-4" />
           <span>Safety Risk Center & Recall Protocols</span>
+        </button>
+
+        <button
+          onClick={() => setIsRecoveryModalOpen(true)}
+          className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-xs ml-auto cursor-pointer"
+        >
+          <Database className="w-4 h-4 text-blue-200" />
+          <span>Data Resilience & Recovery Audit</span>
         </button>
       </div>
 
@@ -414,6 +425,12 @@ export const AuthorityDashboardView: React.FC<AuthorityDashboardViewProps> = ({
           </div>
         </div>
       )}
+
+      <DataRecoveryHubModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onInspectBatch={onSelectBatch}
+      />
     </div>
   );
 };

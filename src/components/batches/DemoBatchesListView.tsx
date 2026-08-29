@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Batch } from '../../types';
 import { ALL_DEMO_BATCHES } from '../../data/mockData';
 import { StatusBadge } from '../common/StatusBadge';
+import { RecordIntegrityBadge } from '../integrity/RecordIntegrityBadge';
+import { dataIntegrityService } from '../../services/dataIntegrityService';
 import { Search, Filter, ArrowRight, Layers, Warehouse, QrCode } from 'lucide-react';
 
 interface DemoBatchesListViewProps {
@@ -122,7 +124,10 @@ export const DemoBatchesListView: React.FC<DemoBatchesListViewProps> = ({ onSele
             </div>
 
             <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-emerald-700">
-              <StatusBadge status={batch.status} size="sm" />
+              <div className="flex items-center gap-1.5">
+                <StatusBadge status={batch.status} size="sm" />
+                <RecordIntegrityBadge status={dataIntegrityService.getBatchIntegrityStatus(batch.batchId)} size="sm" />
+              </div>
               <span className="flex items-center gap-1">
                 <span>Inspect Trace</span>
                 <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />

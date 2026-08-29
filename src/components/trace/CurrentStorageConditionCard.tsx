@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { StorageCondition, StorageUnit } from '../../types';
+import { EnvironmentalFactCheckCard } from '../verification/EnvironmentalFactCheckCard';
 import {
   Sun,
   Thermometer,
@@ -13,6 +14,8 @@ import {
   CheckCircle2,
   Activity,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface CurrentStorageConditionCardProps {
@@ -26,6 +29,8 @@ export const CurrentStorageConditionCard: React.FC<CurrentStorageConditionCardPr
   storageUnit,
   productCategory,
 }) => {
+  const [showFactCheck, setShowFactCheck] = useState(false);
+
   // Default values for resilient fallback
   const temp = storageCondition?.temperature ?? (productCategory?.includes('Apple') ? 2.8 : 18.2);
   const humidity = storageCondition?.humidity ?? (productCategory?.includes('Apple') ? 91 : 54);
@@ -256,11 +261,28 @@ export const CurrentStorageConditionCard: React.FC<CurrentStorageConditionCardPr
           <span className="font-medium text-slate-700">{unitName}</span>
           <span className="text-slate-400">· {location}</span>
         </div>
-        <div className="flex items-center gap-1 text-[11px] text-slate-400 font-mono">
-          <Clock className="w-3 h-3" />
-          <span>Last Telemetry Packet: {recordedAt}</span>
-        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowFactCheck(!showFactCheck)}
+          className="inline-flex items-center gap-1 font-bold text-teal-800 hover:text-teal-900 bg-teal-50 px-2.5 py-1 rounded-lg border border-teal-200 transition-colors cursor-pointer"
+        >
+          <Activity className="w-3.5 h-3.5 text-teal-700" />
+          <span>{showFactCheck ? 'Hide Live Fact-Check HUD' : 'Live Telemetry & Excursion Fact-Check'}</span>
+          {showFactCheck ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+        </button>
       </div>
+
+      {/* Embedded Live Telemetry & Environmental Fact-Check Stream */}
+      {showFactCheck && (
+        <div className="mt-5 pt-4 border-t border-slate-100 animate-fadeIn">
+          <EnvironmentalFactCheckCard
+            productCategory={productCategory}
+            defaultMinTemp={minSafeTemp}
+            defaultMaxTemp={maxSafeTemp}
+          />
+        </div>
+      )}
     </div>
   );
 };

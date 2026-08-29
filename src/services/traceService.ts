@@ -33,6 +33,14 @@ export interface CreateBatchInput {
     previewUrl: string;
     captureType: 'PHOTO' | 'VIDEO';
   };
+  labCertificate?: {
+    certificateId: string;
+    title: string;
+    issuer: string;
+    documentRef: string;
+    pesticidePpm?: string;
+    fileUrl?: string;
+  };
 }
 
 export interface TransformBatchInput {
@@ -323,7 +331,30 @@ class SupabaseTraceService implements ITraceService {
     };
   }
 
+  private getLocalBatches(): Record<string, Batch> {
+    if (typeof localStorage === 'undefined') return {};
+    try {
+      const raw = localStorage.getItem('ft_local_custom_batches_v1');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  private saveLocalBatch(batch: Batch) {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      const all = this.getLocalBatches();
+      all[batch.batchId] = batch;
+      localStorage.setItem('ft_local_custom_batches_v1', JSON.stringify(all));
+    } catch {}
+  }
+
   public async getBatchById(batchId: string): Promise<Batch | null> {
+    // 1. Check local in-memory/localStorage batches first
+    const local = this.getLocalBatches();
+    if (local[batchId]) return local[batchId];
+
     try {
       const { data, error } = await supabase
         .from('batches')
@@ -376,27 +407,60 @@ class SupabaseTraceService implements ITraceService {
         .or(`batch_code.ilike.%${q}%,product_name.ilike.%${q}%,origin.ilike.%${q}%,current_owner.ilike.%${q}%`)
         .order('created_at', { ascending: false });
 
-      if (error || !data || data.length === 0) {
-        return Object.values(ALL_DEMO_BATCHES).filter(
-          (b) =>
-            b.batchId.toLowerCase().includes(q) ||
-            b.productName.toLowerCase().includes(q) ||
-            b.origin.toLowerCase().includes(q)
-        );
-      }
-
-      return await Promise.all(data.map((r) => this.mapDbRowToBatch(r)));
-    } catch (err) {
-      return Object.values(ALL_DEMO_BATCHES).filter(
+      const localList = Object.values(this.getLocalBatches()).filter(
         (b) =>
           b.batchId.toLowerCase().includes(q) ||
           b.productName.toLowerCase().includes(q) ||
           b.origin.toLowerCase().includes(q)
       );
+
+      if (error || !data || data.length === 0) {
+        const demoMatches = Object.values(ALL_DEMO_BATCHES).filter(
+          (b) =>
+            b.batchId.toLowerCase().includes(q) ||
+            b.productName.toLowerCase().includes(q) ||
+            b.origin.toLowerCase().includes(q)
+        );
+        const map = new Map<string, Batch>();
+        localList.forEach((b) => map.set(b.batchId, b));
+        demoMatches.forEach((b) => {
+          if (!map.has(b.batchId)) map.set(b.batchId, b);
+        });
+        return Array.from(map.values());
+      }
+
+      const dbBatches = await Promise.all(data.map((r) => this.mapDbRowToBatch(r)));
+      const map = new Map<string, Batch>();
+      localList.forEach((b) => map.set(b.batchId, b));
+      dbBatches.forEach((b) => {
+        if (!map.has(b.batchId)) map.set(b.batchId, b);
+      });
+      return Array.from(map.values());
+    } catch (err) {
+      const localList = Object.values(this.getLocalBatches()).filter(
+        (b) =>
+          b.batchId.toLowerCase().includes(q) ||
+          b.productName.toLowerCase().includes(q) ||
+          b.origin.toLowerCase().includes(q)
+      );
+      const demoMatches = Object.values(ALL_DEMO_BATCHES).filter(
+        (b) =>
+          b.batchId.toLowerCase().includes(q) ||
+          b.productName.toLowerCase().includes(q) ||
+          b.origin.toLowerCase().includes(q)
+      );
+      const map = new Map<string, Batch>();
+      localList.forEach((b) => map.set(b.batchId, b));
+      demoMatches.forEach((b) => {
+        if (!map.has(b.batchId)) map.set(b.batchId, b);
+      });
+      return Array.from(map.values());
     }
   }
 
   public async getAllBatches(): Promise<Batch[]> {
+    const localList = Object.values(this.getLocalBatches());
+
     try {
       const { data, error } = await supabase
         .from('batches')
@@ -404,34 +468,30 @@ class SupabaseTraceService implements ITraceService {
         .order('created_at', { ascending: false });
 
       if (error || !data || data.length === 0) {
-        const cached = localStorage.getItem('ft_cache_all_batches');
-        if (cached) {
-          try {
-            return JSON.parse(cached);
-          } catch (e) {
-            // ignore
-          }
-        }
-        return Object.values(ALL_DEMO_BATCHES);
+        const demoBatches = Object.values(ALL_DEMO_BATCHES);
+        const map = new Map<string, Batch>();
+        localList.forEach((b) => map.set(b.batchId, b));
+        demoBatches.forEach((b) => {
+          if (!map.has(b.batchId)) map.set(b.batchId, b);
+        });
+        return Array.from(map.values());
       }
 
-      const batches = await Promise.all(data.map((r) => this.mapDbRowToBatch(r)));
-      try {
-        localStorage.setItem('ft_cache_all_batches', JSON.stringify(batches));
-      } catch (e) {
-        // ignore
-      }
-      return batches;
+      const dbBatches = await Promise.all(data.map((r) => this.mapDbRowToBatch(r)));
+      const map = new Map<string, Batch>();
+      localList.forEach((b) => map.set(b.batchId, b));
+      dbBatches.forEach((b) => {
+        if (!map.has(b.batchId)) map.set(b.batchId, b);
+      });
+      return Array.from(map.values());
     } catch (err) {
-      const cached = localStorage.getItem('ft_cache_all_batches');
-      if (cached) {
-        try {
-          return JSON.parse(cached);
-        } catch (e) {
-          // ignore
-        }
-      }
-      return Object.values(ALL_DEMO_BATCHES);
+      const demoBatches = Object.values(ALL_DEMO_BATCHES);
+      const map = new Map<string, Batch>();
+      localList.forEach((b) => map.set(b.batchId, b));
+      demoBatches.forEach((b) => {
+        if (!map.has(b.batchId)) map.set(b.batchId, b);
+      });
+      return Array.from(map.values());
     }
   }
 
@@ -440,6 +500,26 @@ class SupabaseTraceService implements ITraceService {
     userName: string,
     orgName: string
   ): Promise<Batch[]> {
+    const localList = Object.values(this.getLocalBatches());
+    const userLower = (userName || '').toLowerCase();
+
+    // Local custom batches created by this user
+    const matchingLocal = localList.filter((b) => {
+      if (userRole === 'FARMER') {
+        return (
+          b.originFarmerName.toLowerCase().includes(userLower) ||
+          b.currentOwner.toLowerCase().includes(userLower) ||
+          b.currentOwnerRole === 'FARMER'
+        );
+      }
+      if (userRole === 'MANDI') return b.events.some((e) => e.actorRole === 'MANDI') || b.currentOwnerRole === 'MANDI';
+      if (userRole === 'WAREHOUSE') return b.currentOwnerRole === 'WAREHOUSE' || b.status === 'STORED';
+      if (userRole === 'PROCESSOR' || userRole === 'FACTORY') return b.currentOwnerRole === 'PROCESSOR' || b.parentBatchIds.length > 0;
+      if (userRole === 'TRANSPORTER') return b.events.some((e) => e.actorRole === 'TRANSPORTER');
+      if (userRole === 'RETAILER') return b.currentOwnerRole === 'RETAILER' || b.status === 'RETAILED';
+      return true;
+    });
+
     try {
       let query = supabase.from('batches').select('*');
 
@@ -455,18 +535,46 @@ class SupabaseTraceService implements ITraceService {
 
       if (error || !data || data.length === 0) {
         const all = Object.values(ALL_DEMO_BATCHES);
-        if (userRole === 'FARMER') return all.filter((b) => b.originFarmerName.includes('Ramesh') || b.currentOwnerRole === 'FARMER');
-        if (userRole === 'MANDI') return all.filter((b) => b.events.some((e) => e.actorRole === 'MANDI'));
-        if (userRole === 'WAREHOUSE') return all.filter((b) => b.currentOwnerRole === 'WAREHOUSE' || b.status === 'STORED');
-        if (userRole === 'PROCESSOR' || userRole === 'FACTORY') return all.filter((b) => b.currentOwnerRole === 'PROCESSOR' || b.category.includes('Flour') || b.parentBatchIds.length > 0);
-        if (userRole === 'TRANSPORTER' || userRole === 'DISTRIBUTOR') return all.filter((b) => b.events.some((e) => e.actorRole === 'TRANSPORTER'));
-        if (userRole === 'RETAILER') return all.filter((b) => b.currentOwnerRole === 'RETAILER' || b.status === 'RETAILED');
-        return all;
+        let demoFiltered: Batch[] = [];
+        if (userRole === 'FARMER') {
+          demoFiltered = all.filter((b) => b.originFarmerName.toLowerCase().includes(userLower) || b.currentOwnerRole === 'FARMER');
+        } else if (userRole === 'MANDI') {
+          demoFiltered = all.filter((b) => b.events.some((e) => e.actorRole === 'MANDI'));
+        } else if (userRole === 'WAREHOUSE') {
+          demoFiltered = all.filter((b) => b.currentOwnerRole === 'WAREHOUSE' || b.status === 'STORED');
+        } else if (userRole === 'PROCESSOR' || userRole === 'FACTORY') {
+          demoFiltered = all.filter((b) => b.currentOwnerRole === 'PROCESSOR' || b.category.includes('Flour') || b.parentBatchIds.length > 0);
+        } else if (userRole === 'TRANSPORTER' || userRole === 'DISTRIBUTOR') {
+          demoFiltered = all.filter((b) => b.events.some((e) => e.actorRole === 'TRANSPORTER'));
+        } else if (userRole === 'RETAILER') {
+          demoFiltered = all.filter((b) => b.currentOwnerRole === 'RETAILER' || b.status === 'RETAILED');
+        } else {
+          demoFiltered = all;
+        }
+
+        const map = new Map<string, Batch>();
+        matchingLocal.forEach((b) => map.set(b.batchId, b));
+        demoFiltered.forEach((b) => {
+          if (!map.has(b.batchId)) map.set(b.batchId, b);
+        });
+        return Array.from(map.values());
       }
 
-      return await Promise.all(data.map((r) => this.mapDbRowToBatch(r)));
+      const dbBatches = await Promise.all(data.map((r) => this.mapDbRowToBatch(r)));
+      const map = new Map<string, Batch>();
+      matchingLocal.forEach((b) => map.set(b.batchId, b));
+      dbBatches.forEach((b) => {
+        if (!map.has(b.batchId)) map.set(b.batchId, b);
+      });
+      return Array.from(map.values());
     } catch (err) {
-      return Object.values(ALL_DEMO_BATCHES);
+      const all = Object.values(ALL_DEMO_BATCHES);
+      const map = new Map<string, Batch>();
+      matchingLocal.forEach((b) => map.set(b.batchId, b));
+      all.forEach((b) => {
+        if (!map.has(b.batchId)) map.set(b.batchId, b);
+      });
+      return Array.from(map.values());
     }
   }
 
@@ -578,6 +686,34 @@ class SupabaseTraceService implements ITraceService {
       evidenceIds: evidenceCode ? [evidenceCode] : [],
     };
 
+    const certificates: any[] = [
+      {
+        certificateId: `CERT-ORIGIN-${Date.now().toString().slice(-4)}`,
+        title: 'Farm Origin Registration Standard',
+        issuer: 'Maharashtra Organic Farming Federation (Demo)',
+        type: 'ORIGIN_VERIFICATION',
+        issuedDate: timestamp.split('T')[0],
+        expiryDate: expiryDate.split('T')[0],
+        verificationStatus: 'VERIFIED',
+        documentRef: `DOC-ORIGIN-${batchCode}`,
+        isDemoNonFSSAI: true,
+      },
+    ];
+
+    if (input.labCertificate) {
+      certificates.unshift({
+        certificateId: input.labCertificate.certificateId || `CERT-LAB-${Date.now().toString().slice(-4)}`,
+        title: input.labCertificate.title || 'NABL Accredited Soil & Pesticide Residue Test Certificate',
+        issuer: input.labCertificate.issuer || 'AgriTest Laboratories NABL #4912',
+        type: 'LAB_TEST',
+        issuedDate: timestamp.split('T')[0],
+        expiryDate: expiryDate.split('T')[0],
+        verificationStatus: 'VERIFIED',
+        documentRef: input.labCertificate.documentRef || `NABL-TEST-${batchCode}`,
+        isDemoNonFSSAI: false,
+      });
+    }
+
     const scoreBreakdown = calculateBatchScore({
       origin: input.origin,
       originFarmerName: input.originFarmerName,
@@ -589,92 +725,111 @@ class SupabaseTraceService implements ITraceService {
       events: [initialEvent],
       evidences: newEvidence,
       feedbacks: [],
-      certificates: [],
+      certificates,
     });
+
+    const createdBatch: Batch = {
+      batchId: batchCode,
+      productName: input.productName,
+      category: input.category,
+      variety: input.variety || 'Standard Grade',
+      quantity: input.quantity,
+      unit: input.unit,
+      origin: input.origin,
+      originFarmerId: input.originFarmerId || 'usr-farmer-local',
+      originFarmerName: input.originFarmerName,
+      currentOwner: `${input.originFarmerName} Farm Collective`,
+      currentOwnerRole: 'FARMER',
+      currentLocation: input.origin,
+      status: 'ACTIVE',
+      createdAt: timestamp,
+      harvestDate: input.harvestDate || timestamp,
+      productionDate: timestamp,
+      expiryDate,
+      parentBatchIds: [],
+      childBatchIds: [],
+      events: [initialEvent],
+      evidences: newEvidence,
+      feedbacks: [],
+      certificates,
+      scoreBreakdown,
+      qrCodeString: `https://farmtracer.app/trace/${batchCode}`,
+    };
+
+    // Save to local custom batches store for immediate persistence and offline reliability
+    this.saveLocalBatch(createdBatch);
 
     // 1. Insert into Supabase batches table
-    const { data: insertedBatch, error: batchErr } = await supabase
-      .from('batches')
-      .insert({
+    try {
+      const { data: insertedBatch, error: batchErr } = await supabase
+        .from('batches')
+        .insert({
+          batch_code: batchCode,
+          product_name: input.productName,
+          category: input.category,
+          variety: input.variety || 'Standard Grade',
+          quantity: input.quantity,
+          unit: input.unit,
+          origin: input.origin,
+          origin_farmer_id: input.originFarmerId || null,
+          origin_farmer_name: input.originFarmerName,
+          current_owner: `${input.originFarmerName} Farm Collective`,
+          current_owner_role: 'FARMER',
+          current_location: input.origin,
+          lat: 19.8856,
+          lng: 74.4782,
+          status: 'ACTIVE',
+          harvest_date: input.harvestDate || timestamp,
+          production_date: timestamp,
+          expiry_date: expiryDate,
+          total_score: scoreBreakdown.totalScore,
+          score_breakdown: scoreBreakdown,
+          evidences: newEvidence,
+          feedbacks: [],
+          certificates,
+          qr_code_string: `https://farmtracer.app/trace/${batchCode}`,
+        })
+        .select('*')
+        .single();
+
+      if (batchErr) {
+        console.warn('Supabase batch insert notice:', batchErr);
+      }
+
+      // 2. Insert Supply Chain Event
+      await supabase.from('supply_chain_events').insert({
+        event_code: eventCode,
+        batch_id: insertedBatch?.id,
         batch_code: batchCode,
-        product_name: input.productName,
-        category: input.category,
-        variety: input.variety || 'Standard Grade',
-        quantity: input.quantity,
-        unit: input.unit,
-        origin: input.origin,
-        origin_farmer_id: input.originFarmerId || null,
-        origin_farmer_name: input.originFarmerName,
-        current_owner: `${input.originFarmerName} Farm Collective`,
-        current_owner_role: 'FARMER',
-        current_location: input.origin,
+        event_type: 'HARVESTED',
+        actor: input.originFarmerName,
+        actor_role: 'FARMER',
+        organization: `${input.originFarmerName} Farm Collective`,
+        location: input.origin,
         lat: 19.8856,
         lng: 74.4782,
-        status: 'ACTIVE',
-        harvest_date: input.harvestDate || timestamp,
-        production_date: timestamp,
-        expiry_date: expiryDate,
-        total_score: scoreBreakdown.totalScore,
-        score_breakdown: scoreBreakdown,
-        evidences: newEvidence,
-        feedbacks: [],
-        certificates: [
-          {
-            certificateId: `CERT-ORIGIN-${Date.now().toString().slice(-4)}`,
-            title: 'Farm Origin Registration Standard',
-            issuer: 'Maharashtra Organic Farming Federation (Demo)',
-            type: 'ORIGIN_VERIFICATION',
-            issuedDate: timestamp.split('T')[0],
-            expiryDate: expiryDate.split('T')[0],
-            verificationStatus: 'VERIFIED',
-            documentRef: `DOC-ORIGIN-${batchCode}`,
-            isDemoNonFSSAI: true,
-          },
-        ],
-        qr_code_string: `FARM-TRACER://BATCH/${batchCode}`,
-      })
-      .select('*')
-      .single();
+        timestamp,
+        quantity: `${input.quantity} ${input.unit}`,
+        notes: input.notes || 'Batch created at farm origin with verified harvest metadata.',
+        verification_state: 'VERIFIED',
+        evidence_ids: evidenceCode ? [evidenceCode] : [],
+      });
 
-    if (batchErr) {
-      console.error('Error inserting batch into Supabase:', batchErr);
+      // 3. Log Audit Entry
+      await supabase.from('audit_logs').insert({
+        action: 'BATCH_CREATED',
+        actor_name: input.originFarmerName,
+        actor_role: 'FARMER',
+        entity_type: 'BATCH',
+        entity_id: batchCode,
+        details: { quantity: input.quantity, unit: input.unit, origin: input.origin },
+      });
+    } catch (e) {
+      console.warn('Backend sync caught, operating on local batch state:', e);
     }
-
-    // 2. Insert Supply Chain Event
-    const { error: eventErr } = await supabase.from('supply_chain_events').insert({
-      event_code: eventCode,
-      batch_id: insertedBatch?.id,
-      batch_code: batchCode,
-      event_type: 'HARVESTED',
-      actor: input.originFarmerName,
-      actor_role: 'FARMER',
-      organization: `${input.originFarmerName} Farm Collective`,
-      location: input.origin,
-      lat: 19.8856,
-      lng: 74.4782,
-      timestamp,
-      quantity: `${input.quantity} ${input.unit}`,
-      notes: input.notes || 'Batch created at farm origin with verified harvest metadata.',
-      verification_state: 'VERIFIED',
-      evidence_ids: evidenceCode ? [evidenceCode] : [],
-    });
-
-    if (eventErr) {
-      console.error('Error inserting event into Supabase:', eventErr);
-    }
-
-    // 3. Log Audit Entry
-    await supabase.from('audit_logs').insert({
-      action: 'BATCH_CREATED',
-      actor_name: input.originFarmerName,
-      actor_role: 'FARMER',
-      entity_type: 'BATCH',
-      entity_id: batchCode,
-      details: { quantity: input.quantity, unit: input.unit, origin: input.origin },
-    });
 
     this.notify();
-    return this.getBatchById(batchCode) as Promise<Batch>;
+    return createdBatch;
   }
 
   public async transformBatch(input: TransformBatchInput): Promise<Batch> {

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SupplyChainEvent, Batch, EvidenceRecord } from '../../types';
 import { StatusBadge } from '../common/StatusBadge';
+import { dataIntegrityService } from '../../services/dataIntegrityService';
 import {
   User,
   MapPin,
@@ -15,6 +16,7 @@ import {
   FileText,
   ExternalLink,
   X,
+  RefreshCw,
 } from 'lucide-react';
 
 interface EventTimelineViewProps {
@@ -95,6 +97,12 @@ export const EventTimelineView: React.FC<EventTimelineViewProps> = ({
                       {evt.eventType}
                     </span>
                     <StatusBadge status={evt.verificationState} size="sm" />
+                    {dataIntegrityService.getIncidentState() !== 'NORMAL' && (
+                      <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-md font-mono text-[10px] font-bold border border-blue-200 flex items-center gap-1">
+                        <RefreshCw className="w-2.5 h-2.5" />
+                        <span>Recovered Ledger Block</span>
+                      </span>
+                    )}
                     <span className="text-xs text-slate-500 font-mono flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
                       {new Date(evt.timestamp).toLocaleString()}

@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   MapPin,
   Navigation,
@@ -29,6 +31,9 @@ import {
   ChevronRight,
   ListOrdered,
   Map as MapIcon,
+  Globe,
+  Compass,
+  Milestone,
 } from 'lucide-react';
 import { Batch, SupplyChainEvent, StakeholderRole } from '../../types';
 
@@ -74,6 +79,30 @@ const LOCATION_COORDS: Record<string, { lat: number; lng: number }> = {
   delhi: { lat: 28.6139, lng: 77.2090 },
 };
 
+// Map Tile Layers
+const MAP_TILES = {
+  carto_dark: {
+    name: 'Dark Matter',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  },
+  osm_standard: {
+    name: 'OpenStreetMap',
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  },
+  satellite: {
+    name: 'Satellite Aerial',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+  },
+  carto_light: {
+    name: 'Positron Light',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+  },
+};
+
 function getRoleIcon(role: string) {
   switch (role) {
     case 'FARMER':
@@ -96,56 +125,31 @@ function getRoleIcon(role: string) {
   }
 }
 
-function getRoleColorClasses(role: string, isSelected: boolean) {
-  if (isSelected) {
-    return 'bg-emerald-500 text-slate-950 ring-4 ring-emerald-400/50 shadow-lg scale-110';
-  }
+function getRoleColor(role: string) {
   switch (role) {
     case 'FARMER':
-      return 'bg-emerald-600 text-white border border-emerald-400 hover:bg-emerald-500';
+      return { hex: '#10b981', bg: 'bg-emerald-500', text: 'text-emerald-400' };
     case 'MANDI':
-      return 'bg-amber-600 text-white border border-amber-400 hover:bg-amber-500';
+      return { hex: '#f59e0b', bg: 'bg-amber-500', text: 'text-amber-400' };
     case 'WAREHOUSE':
-      return 'bg-teal-600 text-white border border-teal-400 hover:bg-teal-500';
+      return { hex: '#14b8a6', bg: 'bg-teal-500', text: 'text-teal-400' };
     case 'PROCESSOR':
     case 'MANUFACTURER':
     case 'FACTORY':
-      return 'bg-purple-600 text-white border border-purple-400 hover:bg-purple-500';
+      return { hex: '#a855f7', bg: 'bg-purple-500', text: 'text-purple-400' };
     case 'TRANSPORTER':
     case 'DISTRIBUTOR':
-      return 'bg-blue-600 text-white border border-blue-400 hover:bg-blue-500';
+      return { hex: '#38bdf8', bg: 'bg-sky-500', text: 'text-sky-400' };
     case 'RETAILER':
-      return 'bg-orange-600 text-white border border-orange-400 hover:bg-orange-500';
+      return { hex: '#f97316', bg: 'bg-orange-500', text: 'text-orange-400' };
     default:
-      return 'bg-slate-700 text-white border border-slate-500 hover:bg-slate-600';
+      return { hex: '#64748b', bg: 'bg-slate-500', text: 'text-slate-400' };
   }
 }
 
-function getRoleBadgeColor(role: string) {
-  switch (role) {
-    case 'FARMER':
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-    case 'MANDI':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
-    case 'WAREHOUSE':
-      return 'bg-teal-100 text-teal-800 border-teal-200';
-    case 'PROCESSOR':
-    case 'MANUFACTURER':
-    case 'FACTORY':
-      return 'bg-purple-100 text-purple-800 border-purple-200';
-    case 'TRANSPORTER':
-    case 'DISTRIBUTOR':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
-    case 'RETAILER':
-      return 'bg-orange-100 text-orange-800 border-orange-200';
-    default:
-      return 'bg-slate-100 text-slate-800 border-slate-200';
-  }
-}
-
-// Approximate Haversine distance in KM
+// Haversine distance calculator
 function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth radius in km
+  const R = 6371; // Radius of earth in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -160,69 +164,117 @@ function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: num
 
 export const SupplyChainRouteMap: React.FC<SupplyChainRouteMapProps> = ({
   batch,
-  selectedWaypointIndex,
+  selectedWaypointIndex = null,
   onSelectWaypoint,
 }) => {
-  const [activeStop, setActiveStop] = useState<number>(selectedWaypointIndex ?? 0);
-  const [viewMode, setViewMode] = useState<'map' | 'flow'>('map');
+  const [internalSelectedIndex, setInternalSelectedIndex] = useState<number>(0);
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const playTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [viewMode, setViewMode] = useState<'leaflet' | 'vector' | 'flow'>('leaflet');
+  const [activeTileKey, setActiveTileKey] = useState<keyof typeof MAP_TILES>('carto_dark');
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
-  // 1. Dynamically compute structured waypoints from batch.events
-  const waypoints = useMemo<ComputedWaypoint[]>(() => {
-    const rawEvents: SupplyChainEvent[] =
-      batch.events && batch.events.length > 0
-        ? [...batch.events].sort(
-            (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-          )
-        : [];
+  const activeIndex = selectedWaypointIndex !== null && selectedWaypointIndex !== undefined
+    ? selectedWaypointIndex
+    : internalSelectedIndex;
 
-    if (rawEvents.length === 0) {
-      // Safe fallback if batch has no events yet
-      return [
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const leafletMapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const polylineRef = useRef<L.Polyline | null>(null);
+
+  // 1. Build Dynamic Waypoints from batch.events
+  const waypoints: ComputedWaypoint[] = useMemo(() => {
+    let rawEvents: SupplyChainEvent[] = [];
+
+    if (batch.events && batch.events.length > 0) {
+      rawEvents = [...batch.events].sort(
+        (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+      );
+    } else {
+      // Default fallback itinerary
+      rawEvents = [
         {
-          id: 'wp-origin',
-          name: batch.origin || 'Origin Farm',
-          stageName: '1. Harvest Origin',
-          role: 'FARMER',
-          actor: batch.originFarmerName || 'Primary Producer',
-          organization: 'Origin Farmer Cooperative',
-          coordinates: '19.8856°N, 74.4782°E',
-          lat: 19.8856,
-          lng: 74.4782,
-          temp: '22.0°C Ambient',
-          status: 'Harvest Recorded',
+          eventId: 'ev-harvest',
+          batchId: batch.batchId,
+          eventType: 'HARVESTED',
+          actor: batch.originFarmerName || 'Ramesh Patil',
+          actorRole: 'FARMER',
+          organization: batch.origin || 'Kopargaon Farmers FPO',
+          location: 'Kopargaon Farms, Ahmednagar',
+          coordinates: { lat: 19.8856, lng: 74.4782 },
           timestamp: batch.harvestDate || batch.createdAt,
+          quantity: `${batch.quantity} ${batch.unit}`,
+          notes: 'Fresh harvest lot logged at farm origin with verified coordinates.',
           verificationState: 'VERIFIED',
-          evidenceCount: batch.evidences?.length || 1,
-          x: 20,
-          y: 40,
+          evidenceIds: ['ev-proof-1'],
         },
         {
-          id: 'wp-current',
-          name: batch.currentLocation || 'Current Custody Facility',
-          stageName: '2. Current Location',
-          role: batch.currentOwnerRole || 'WAREHOUSE',
-          actor: batch.currentOwner || 'Facility Manager',
-          coordinates: '19.8510°N, 74.4620°E',
-          lat: 19.851,
-          lng: 74.462,
-          temp: batch.currentStorage?.temperature
-            ? `${batch.currentStorage.temperature}°C Solar Vault`
-            : '18.2°C Regulated',
-          status: batch.status,
-          timestamp: batch.updatedAt,
+          eventId: 'ev-mandi',
+          batchId: batch.batchId,
+          eventType: 'TRANSFERRED',
+          actor: 'Kopargaon APMC',
+          actorRole: 'MANDI',
+          organization: 'APMC Market Yard #02',
+          location: 'Kopargaon APMC Hub',
+          coordinates: { lat: 19.8920, lng: 74.4850 },
+          timestamp: new Date(new Date(batch.createdAt).getTime() + 86400000).toISOString(),
+          quantity: `${batch.quantity} ${batch.unit}`,
+          notes: 'Weighbridge calibrated and grade verified.',
           verificationState: 'VERIFIED',
-          evidenceCount: 1,
-          x: 80,
-          y: 50,
+          evidenceIds: ['ev-proof-2'],
+        },
+        {
+          eventId: 'ev-storage',
+          batchId: batch.batchId,
+          eventType: 'STORED',
+          actor: 'MahaAgro Solar Cool',
+          actorRole: 'WAREHOUSE',
+          organization: 'Solar Smart Cold Storage Unit #04',
+          location: 'Shirdi Highway Hub',
+          coordinates: { lat: 19.7645, lng: 74.4772 },
+          timestamp: new Date(new Date(batch.createdAt).getTime() + 172800000).toISOString(),
+          quantity: `${batch.quantity} ${batch.unit}`,
+          notes: '18.2°C solar-powered cold chain vault intake.',
+          verificationState: 'VERIFIED',
+          evidenceIds: ['ev-proof-3'],
+        },
+        {
+          eventId: 'ev-processor',
+          batchId: batch.batchId,
+          eventType: 'TRANSFORMED',
+          actor: 'Vikram Joshi',
+          actorRole: 'PROCESSOR',
+          organization: 'Maharashtra Grain Mills Pvt Ltd',
+          location: 'Ambad Industrial, Nashik',
+          coordinates: { lat: 19.9320, lng: 73.7310 },
+          timestamp: new Date(new Date(batch.createdAt).getTime() + 259200000).toISOString(),
+          quantity: `${batch.quantity} ${batch.unit}`,
+          notes: 'Stone-ground unbleached transformation milling.',
+          verificationState: 'VERIFIED',
+          evidenceIds: ['ev-proof-4'],
+        },
+        {
+          eventId: 'ev-retail',
+          batchId: batch.batchId,
+          eventType: 'SOLD',
+          actor: batch.currentOwner || 'Pooja Kulkarni',
+          actorRole: 'RETAILER',
+          organization: 'FreshMart Superstore',
+          location: batch.currentLocation || 'Station Road, Kopargaon',
+          coordinates: { lat: 19.8856, lng: 74.4782 },
+          timestamp: batch.updatedAt || batch.createdAt,
+          quantity: `${batch.quantity} ${batch.unit}`,
+          notes: 'Stocked on consumer shelf with scannable QR label.',
+          verificationState: 'VERIFIED',
+          evidenceIds: ['ev-proof-5'],
         },
       ];
     }
 
-    // Resolve lat/lng for every event
-    const resolvedPoints = rawEvents.map((ev, i) => {
+    // Resolve Lat/Lng
+    const resolved = rawEvents.map((ev, i) => {
       let lat = ev.coordinates?.lat;
       let lng = ev.coordinates?.lng;
 
@@ -237,7 +289,6 @@ export const SupplyChainRouteMap: React.FC<SupplyChainRouteMapProps> = ({
         }
       }
 
-      // Default safe fallback if still unresolved
       if (!lat || !lng) {
         lat = 19.8856 + (i * 0.12 - 0.2);
         lng = 74.4782 + (i * 0.18 - 0.3);
@@ -263,497 +314,567 @@ export const SupplyChainRouteMap: React.FC<SupplyChainRouteMapProps> = ({
         lng,
         temp: tempStr,
         status: ev.verificationState === 'VERIFIED' ? 'Verified Handoff' : 'Inspected',
-        timestamp: ev.timestamp,
-        notes: ev.notes,
+        timestamp: new Date(ev.timestamp).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
+        notes: ev.notes || 'Handoff verified and logged in tamper-evident ledger.',
         verificationState: ev.verificationState || 'VERIFIED',
-        evidenceCount: ev.evidenceIds?.length || 0,
+        evidenceCount: ev.evidenceIds?.length || 1,
+        x: 0,
+        y: 0,
       };
     });
 
-    // Project coordinates across map canvas box (15% to 85% width, 20% to 80% height)
-    const count = resolvedPoints.length;
-    return resolvedPoints.map((pt, i) => {
-      // Compute progressive X and slightly undulating Y to create natural corridor curve
-      const x = count === 1 ? 50 : 15 + (i / (count - 1)) * 70;
-      const yWave = Math.sin((i / (count - 1 || 1)) * Math.PI) * 22;
-      const y = 35 + (i % 2 === 0 ? -yWave * 0.6 : yWave) + ((i % 3) * 6 - 6);
-
-      return {
-        ...pt,
-        x: Math.max(12, Math.min(88, x)),
-        y: Math.max(18, Math.min(78, y)),
-      };
+    // Compute SVG vector canvas percentages
+    const total = resolved.length;
+    return resolved.map((wp, i) => {
+      const xPct = total <= 1 ? 50 : 12 + (i / (total - 1)) * 76;
+      const wave = Math.sin((i / Math.max(1, total - 1)) * Math.PI * 2) * 15;
+      const yPct = 50 + wave;
+      return { ...wp, x: xPct, y: yPct };
     });
   }, [batch]);
 
-  // Total route transit distance
-  const totalDistance = useMemo(() => {
-    let dist = 0;
+  // Total Highway Distance
+  const totalDistanceKm = useMemo(() => {
+    let sum = 0;
     for (let i = 0; i < waypoints.length - 1; i++) {
-      dist += calculateDistanceKm(
+      sum += calculateDistanceKm(
         waypoints[i].lat,
         waypoints[i].lng,
         waypoints[i + 1].lat,
         waypoints[i + 1].lng
       );
     }
-    return dist > 0 ? dist : 420;
+    return Math.max(18, sum);
   }, [waypoints]);
 
-  const currentWp = waypoints[activeStop] || waypoints[0];
+  // 2. Initialize Leaflet Real-World Map
+  useEffect(() => {
+    if (viewMode !== 'leaflet' || !mapContainerRef.current || waypoints.length === 0) return;
 
-  const handlePointClick = (idx: number) => {
-    setActiveStop(idx);
-    if (onSelectWaypoint && waypoints[idx]) {
-      onSelectWaypoint(idx, waypoints[idx].name);
+    // Clean up previous instance
+    if (leafletMapRef.current) {
+      leafletMapRef.current.remove();
+      leafletMapRef.current = null;
     }
-  };
 
-  // Play journey animation loop
-  const togglePlayJourney = () => {
+    try {
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: false,
+        attributionControl: false,
+        fadeAnimation: true,
+      });
+
+      // Set Tile Layer
+      const tileCfg = MAP_TILES[activeTileKey];
+      const tileLayer = L.tileLayer(tileCfg.url, {
+        maxZoom: 18,
+        attribution: tileCfg.attribution,
+      }).addTo(map);
+      tileLayerRef.current = tileLayer;
+
+      // LatLng points
+      const latLngs: L.LatLngExpression[] = waypoints.map((w) => [w.lat, w.lng]);
+
+      // Route Corridor Polyline with glow
+      const polyline = L.polyline(latLngs, {
+        color: '#10b981',
+        weight: 4,
+        opacity: 0.85,
+        dashArray: '8, 6',
+        lineCap: 'round',
+        lineJoin: 'round',
+      }).addTo(map);
+      polylineRef.current = polyline;
+
+      // Add Custom HTML Markers for each waypoint
+      const markers: L.Marker[] = [];
+
+      waypoints.forEach((wp, idx) => {
+        const isCurrentActive = idx === activeIndex;
+        const color = getRoleColor(wp.role as string);
+
+        const customIcon = L.divIcon({
+          className: 'ft-custom-leaflet-marker',
+          html: `
+            <div style="
+              width: ${isCurrentActive ? '36px' : '28px'};
+              height: ${isCurrentActive ? '36px' : '28px'};
+              background: ${isCurrentActive ? color.hex : '#0f172a'};
+              border: 2.5px solid ${isCurrentActive ? '#ffffff' : color.hex};
+              border-radius: 50%;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: #ffffff;
+              font-weight: 800;
+              font-size: ${isCurrentActive ? '12px' : '10px'};
+              box-shadow: 0 0 15px ${isCurrentActive ? color.hex : 'rgba(0,0,0,0.5)'};
+              cursor: pointer;
+              transition: all 0.2s ease;
+            ">
+              ${idx + 1}
+            </div>
+          `,
+          iconSize: [36, 36],
+          iconAnchor: [18, 18],
+        });
+
+        const marker = L.marker([wp.lat, wp.lng], { icon: customIcon }).addTo(map);
+
+        marker.on('click', () => {
+          handleSelectPoint(idx);
+        });
+
+        // Tooltip Popup
+        marker.bindPopup(`
+          <div style="font-family: sans-serif; padding: 4px; max-width: 220px; color: #0f172a;">
+            <div style="font-size: 10px; font-weight: 800; color: ${color.hex}; text-transform: uppercase;">
+              Stage ${idx + 1} · ${wp.role}
+            </div>
+            <div style="font-size: 13px; font-weight: 700; margin-top: 2px;">
+              ${wp.name}
+            </div>
+            <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+              ${wp.actor} · ${wp.temp || ''}
+            </div>
+            <div style="font-size: 10px; font-family: monospace; color: #10b981; font-weight: 600; margin-top: 4px;">
+              ${wp.coordinates}
+            </div>
+          </div>
+        `);
+
+        markers.push(marker);
+      });
+
+      markersRef.current = markers;
+
+      // Fit bounds with padding
+      if (latLngs.length > 0) {
+        const bounds = L.latLngBounds(latLngs);
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 12 });
+      }
+
+      leafletMapRef.current = map;
+    } catch (e) {
+      console.warn('Leaflet map init notice:', e);
+    }
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [viewMode, activeTileKey, waypoints]);
+
+  // Synchronize active waypoint selection to Leaflet Map
+  useEffect(() => {
+    if (leafletMapRef.current && waypoints[activeIndex]) {
+      const activeWp = waypoints[activeIndex];
+      leafletMapRef.current.flyTo([activeWp.lat, activeWp.lng], 11, { duration: 0.8 });
+      if (markersRef.current[activeIndex]) {
+        markersRef.current[activeIndex].openPopup();
+      }
+    }
+  }, [activeIndex, waypoints]);
+
+  // Journey Playback Simulation Loop
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
     if (isPlaying) {
-      if (playTimerRef.current) clearInterval(playTimerRef.current);
-      setIsPlaying(false);
-    } else {
-      setIsPlaying(true);
-      playTimerRef.current = setInterval(() => {
-        setActiveStop((prev) => {
+      timer = setInterval(() => {
+        setInternalSelectedIndex((prev) => {
           const next = (prev + 1) % waypoints.length;
+          if (onSelectWaypoint) onSelectWaypoint(next, waypoints[next].name);
           return next;
         });
-      }, 1600);
+      }, 2500);
+    }
+    return () => clearInterval(timer);
+  }, [isPlaying, waypoints, onSelectWaypoint]);
+
+  const handleSelectPoint = (index: number) => {
+    setInternalSelectedIndex(index);
+    if (onSelectWaypoint) {
+      onSelectWaypoint(index, waypoints[index].name);
     }
   };
 
-  useEffect(() => {
-    return () => {
-      if (playTimerRef.current) clearInterval(playTimerRef.current);
-    };
-  }, []);
+  const handleResetFit = () => {
+    setZoomLevel(1);
+    setInternalSelectedIndex(0);
+    if (leafletMapRef.current && waypoints.length > 0) {
+      const latLngs: L.LatLngExpression[] = waypoints.map((w) => [w.lat, w.lng]);
+      leafletMapRef.current.fitBounds(L.latLngBounds(latLngs), { padding: [40, 40] });
+    }
+  };
 
-  // Compute SVG polyline path connecting sequential waypoints
-  const routePathD = useMemo(() => {
-    if (waypoints.length < 2) return '';
-    return waypoints.reduce((acc, pt, i) => {
-      if (i === 0) return `M ${pt.x}% ${pt.y}%`;
-      const prev = waypoints[i - 1];
-      const cx = (prev.x + pt.x) / 2;
-      const cy = (prev.y + pt.y) / 2 + (i % 2 === 0 ? -6 : 6);
-      return `${acc} Q ${cx}% ${cy}%, ${pt.x}% ${pt.y}%`;
-    }, '');
-  }, [waypoints]);
-
-  const CurrentRoleIcon = getRoleIcon(currentWp.role);
+  const activeWaypoint = waypoints[activeIndex] || waypoints[0];
 
   return (
     <div
       id="supply-chain-route-map-container"
-      className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden p-6 md:p-8 space-y-6"
+      className={`bg-slate-900 rounded-3xl border border-slate-800 text-white overflow-hidden shadow-xl transition-all relative ${
+        isFullscreen ? 'fixed inset-4 z-50 overflow-auto bg-slate-950 p-6' : 'p-4 sm:p-6'
+      }`}
     >
-      {/* Header Bar with Metrics & View Switcher */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-xl bg-teal-100 text-teal-800">
-              <Navigation className="w-4 h-4 text-teal-700" />
-            </div>
-            <span className="text-xs font-bold text-teal-800 uppercase tracking-wider font-mono">
-              SKH029 · Verified Route Corridor
-            </span>
+      {/* Top Header & Toolbar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-2xs">
+            <Compass className="w-5 h-5" />
           </div>
-          <h3 className="text-xl font-bold text-slate-900 mt-1 font-['Space_Grotesk',sans-serif]">
-            Supply Chain Transit Corridor & Geo-Audit
-          </h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Sequential custody handoffs, GPS checkpoints, and thermal micro-climate telemetry.
-          </p>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-white text-base md:text-lg font-['Space_Grotesk',sans-serif]">
+                Supply Chain Route Corridor & GeoMap
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30 uppercase">
+                {totalDistanceKm} KM Highway Corridor
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Live geographic transit checkpoints, micro-climate temperatures, and physical handoffs across India.
+            </p>
+          </div>
         </div>
 
-        {/* Route Stats & Controls */}
-        <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-700 bg-slate-100/90 px-3 py-1.5 rounded-xl border border-slate-200/80">
-            <span>Route: ~{totalDistance} km</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-emerald-700 font-bold">{waypoints.length} Checkpoints</span>
-            <span className="text-slate-300">|</span>
-            <span className="text-teal-700 font-semibold">100% Monitored</span>
-          </div>
-
+        {/* View Mode & Map Layer Selectors */}
+        <div className="flex flex-wrap items-center gap-2">
           {/* View Mode Switcher */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 text-xs">
+          <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700 text-xs font-bold">
             <button
-              onClick={() => setViewMode('map')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
-                viewMode === 'map'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
+              onClick={() => setViewMode('leaflet')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                viewMode === 'leaflet'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Globe className="w-3.5 h-3.5" />
+              <span>Real-World GeoMap</span>
+            </button>
+            <button
+              onClick={() => setViewMode('vector')}
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                viewMode === 'vector'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <MapIcon className="w-3.5 h-3.5" />
-              <span>Map View</span>
+              <span>Vector Grid</span>
             </button>
             <button
               onClick={() => setViewMode('flow')}
-              className={`px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
                 viewMode === 'flow'
-                  ? 'bg-white text-slate-900 shadow-2xs'
-                  : 'text-slate-500 hover:text-slate-800'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-slate-400 hover:text-white'
               }`}
             >
               <ListOrdered className="w-3.5 h-3.5" />
-              <span>Corridor Flow</span>
+              <span>Tracking Diagram</span>
             </button>
           </div>
+
+          {/* Leaflet Tile Selector (Only active in leaflet mode) */}
+          {viewMode === 'leaflet' && (
+            <div className="flex items-center bg-slate-800/90 p-1 rounded-xl border border-slate-700 text-xs">
+              <Layers className="w-3.5 h-3.5 text-slate-400 ml-1.5 mr-1" />
+              <select
+                value={activeTileKey}
+                onChange={(e) => setActiveTileKey(e.target.value as any)}
+                className="bg-transparent text-slate-200 font-bold text-[11px] focus:outline-none pr-1 cursor-pointer"
+              >
+                <option value="carto_dark" className="bg-slate-900 text-white">Dark Matter</option>
+                <option value="osm_standard" className="bg-slate-900 text-white">OpenStreetMap</option>
+                <option value="satellite" className="bg-slate-900 text-white">Satellite Aerial</option>
+                <option value="carto_light" className="bg-slate-900 text-white">Positron Light</option>
+              </select>
+            </div>
+          )}
+
+          {/* Journey Simulation Player */}
+          <button
+            onClick={() => setIsPlaying(!isPlaying)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+              isPlaying
+                ? 'bg-rose-600 text-white shadow-md animate-pulse'
+                : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+            }`}
+          >
+            {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-emerald-400" />}
+            <span>{isPlaying ? 'Pause' : 'Play Journey'}</span>
+          </button>
+
+          {/* Reset & Fullscreen */}
+          <button
+            onClick={handleResetFit}
+            className="p-2 hover:bg-slate-800 bg-slate-800/90 border border-slate-700 rounded-xl text-slate-300 transition-colors"
+            title="Fit Route to Bounds"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="p-2 hover:bg-slate-800 bg-slate-800/90 border border-slate-700 rounded-xl text-slate-300 transition-colors"
+            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Map'}
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
-      {/* Main Content Area: Map View vs Structured Flowchart */}
-      {viewMode === 'map' ? (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Map Canvas Column (7 Cols on desktop) */}
-          <div className="lg:col-span-7 flex flex-col space-y-3">
-            <div className="relative w-full h-80 sm:h-96 bg-slate-950 rounded-3xl overflow-hidden border border-slate-800 p-4 select-none shadow-inner">
-              {/* Background Geographic Grid & Topo Mesh */}
-              <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px]" />
-              <div className="absolute inset-0 opacity-10 bg-[linear-gradient(to_right,#0d9488_1px,transparent_1px),linear-gradient(to_bottom,#0d9488_1px,transparent_1px)] [background-size:60px_60px]" />
+      {/* Main Content Area: Map Canvas + Side Waypoint Inspector */}
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* ========================================================================= */}
+        {/* LEFT COLUMN: INTERACTIVE MAP CANVAS (7 COLS) */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-7 bg-slate-950 rounded-3xl border border-slate-800 overflow-hidden relative min-h-[380px] sm:min-h-[440px] flex flex-col justify-between shadow-inner">
+          {/* MODE 1: LEAFLET REAL-WORLD OPENSTREETMAP / SATELLITE / CARTO GEOMAP */}
+          {viewMode === 'leaflet' && (
+            <div className="relative w-full h-full min-h-[380px] sm:min-h-[440px]">
+              <div ref={mapContainerRef} className="w-full h-full min-h-[380px] sm:min-h-[440px] z-10" />
 
-              {/* Ambient Highway Highway Label Lines */}
-              <div className="absolute top-4 left-4 z-10 flex items-center gap-2 text-[10px] font-mono text-emerald-400/90 bg-slate-900/80 px-2.5 py-1 rounded-lg border border-emerald-500/20 backdrop-blur-xs">
-                <Navigation className="w-3 h-3 text-emerald-400" />
-                <span>NH-60 & SH-10 SOLAR TRANSIT CORRIDOR</span>
+              {/* Map Floating HUD Overlay */}
+              <div className="absolute top-3 left-3 z-20 pointer-events-none flex flex-wrap gap-2">
+                <div className="px-3 py-1 bg-slate-900/90 backdrop-blur-md rounded-xl border border-slate-700/80 text-[10px] font-mono font-bold text-emerald-400 flex items-center gap-1.5 shadow-md">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  REAL-WORLD GPS HIGHWAY ROUTE
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* MODE 2: BESPOKE VECTOR TRANSIT MESH (SVG TOPOLOGY) */}
+          {viewMode === 'vector' && (
+            <div className="relative w-full h-full min-h-[380px] sm:min-h-[440px] flex items-center justify-center p-6 select-none">
+              {/* Animated SVG Polyline Highway Path */}
+              <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                <defs>
+                  <linearGradient id="routeVectorGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#10b981" />
+                    <stop offset="35%" stopColor="#14b8a6" />
+                    <stop offset="70%" stopColor="#38bdf8" />
+                    <stop offset="100%" stopColor="#f97316" />
+                  </linearGradient>
+                </defs>
+
+                {/* Main Connected Transit Polyline */}
+                <polyline
+                  points={waypoints.map((w) => `${w.x * 6.5},${w.y * 3.8}`).join(' ')}
+                  fill="none"
+                  stroke="url(#routeVectorGrad)"
+                  strokeWidth="4"
+                  strokeDasharray="8 5"
+                  strokeLinecap="round"
+                  className="animate-[dash_20s_linear_infinite]"
+                />
+              </svg>
+
+              {/* Waypoint Interactive Nodes */}
+              {waypoints.map((wp, idx) => {
+                const isCurrent = idx === activeIndex;
+                const RoleIcon = getRoleIcon(wp.role as string);
+                const color = getRoleColor(wp.role as string);
+
+                return (
+                  <div
+                    key={wp.id}
+                    onClick={() => handleSelectPoint(idx)}
+                    className={`absolute cursor-pointer transition-all transform -translate-x-1/2 -translate-y-1/2 ${
+                      isCurrent ? 'scale-125 z-30' : 'hover:scale-110 z-20 opacity-85 hover:opacity-100'
+                    }`}
+                    style={{ left: `${wp.x}%`, top: `${wp.y}%` }}
+                  >
+                    <div
+                      className={`w-10 h-10 rounded-2xl flex items-center justify-center border-2 shadow-xl ${
+                        isCurrent
+                          ? `bg-slate-900 border-emerald-400 text-emerald-400 ring-4 ring-emerald-400/30`
+                          : 'bg-slate-900 border-slate-700 text-slate-300'
+                      }`}
+                    >
+                      <RoleIcon className="w-5 h-5" />
+                    </div>
+
+                    <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-slate-900/90 px-2 py-0.5 rounded-md border border-slate-800 text-[10px] font-bold text-slate-300">
+                      {idx + 1}. {wp.name.split(',')[0]}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* MODE 3: STRUCTURED CORRIDOR FLOWCHART DIAGRAM */}
+          {viewMode === 'flow' && (
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[440px]">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-800 text-xs text-slate-400 font-bold uppercase tracking-wider">
+                <Milestone className="w-4 h-4 text-emerald-400" />
+                <span>Sequential Batch Movement Tracking Diagram</span>
               </div>
 
-              {/* Map Floating Tools (Zoom, Play Journey, Reset) */}
-              <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800 shadow-md backdrop-blur-xs">
-                <button
-                  onClick={togglePlayJourney}
-                  className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[10px] font-bold ${
-                    isPlaying
-                      ? 'bg-emerald-600 text-white'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800'
-                  }`}
-                  title={isPlaying ? 'Pause Route Simulation' : 'Play Journey Simulation'}
-                >
-                  {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
-                  <span className="hidden sm:inline">{isPlaying ? 'Pause' : 'Play'}</span>
-                </button>
-
-                <button
-                  onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.1))}
-                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                  title="Zoom In"
-                >
-                  <ZoomIn className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={() => setZoomLevel((z) => Math.max(0.8, z - 0.1))}
-                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                  title="Zoom Out"
-                >
-                  <ZoomOut className="w-3.5 h-3.5" />
-                </button>
-
-                <button
-                  onClick={() => {
-                    setZoomLevel(1);
-                    setActiveStop(0);
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                  title="Fit to Route & Reset View"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Scalable Vector Map Layer */}
-              <div
-                className="absolute inset-0 transition-transform duration-300 ease-out"
-                style={{ transform: `scale(${zoomLevel})` }}
-              >
-                {/* SVG Route Line Canvas */}
-                <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
-                  <defs>
-                    <linearGradient id="routeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor="#10b981" />
-                      <stop offset="40%" stopColor="#0d9488" />
-                      <stop offset="70%" stopColor="#38bdf8" />
-                      <stop offset="100%" stopColor="#f97316" />
-                    </linearGradient>
-
-                    <filter id="routeGlow" x="-20%" y="-20%" width="140%" height="140%">
-                      <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="#10b981" floodOpacity="0.5" />
-                    </filter>
-                  </defs>
-
-                  {/* Route Polyline */}
-                  {routePathD && (
-                    <path
-                      d={routePathD}
-                      fill="none"
-                      stroke="url(#routeGradient)"
-                      strokeWidth="3.5"
-                      strokeDasharray="6 4"
-                      filter="url(#routeGlow)"
-                      className="animate-[dash_20s_linear_infinite]"
-                    />
-                  )}
-                </svg>
-
-                {/* Interactive Waypoint Pins on Map */}
+              <div className="space-y-3">
                 {waypoints.map((wp, idx) => {
-                  const isSelected = activeStop === idx;
-                  const IconComponent = getRoleIcon(wp.role);
+                  const isCurrent = idx === activeIndex;
+                  const RoleIcon = getRoleIcon(wp.role as string);
+                  const color = getRoleColor(wp.role as string);
 
                   return (
                     <div
                       key={wp.id}
-                      onClick={() => handlePointClick(idx)}
-                      className="absolute z-20 cursor-pointer transform -translate-x-1/2 -translate-y-1/2 group"
-                      style={{ left: `${wp.x}%`, top: `${wp.y}%` }}
+                      onClick={() => handleSelectPoint(idx)}
+                      className={`cursor-pointer p-4 rounded-2xl border transition-all flex items-center justify-between ${
+                        isCurrent
+                          ? 'bg-slate-800/90 border-emerald-400 ring-2 ring-emerald-400/40 shadow-lg'
+                          : 'bg-slate-900/80 border-slate-800 hover:border-slate-700'
+                      }`}
                     >
-                      {/* Pulsing Beacon for Active Selected Node */}
-                      {isSelected && (
-                        <div className="absolute -inset-3 bg-emerald-400 rounded-full animate-ping opacity-60 pointer-events-none" />
-                      )}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs ${
+                            isCurrent ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded ${color.bg} text-slate-950`}>
+                              {wp.role}
+                            </span>
+                            <span className="font-bold text-xs text-white">{wp.name}</span>
+                          </div>
+                          <span className="text-[11px] text-slate-400 block mt-0.5">
+                            {wp.actor} · {wp.temp}
+                          </span>
+                        </div>
+                      </div>
 
-                      {/* Waypoint Marker Card */}
-                      <div
-                        className={`px-3 py-1.5 rounded-2xl flex items-center gap-1.5 text-xs font-bold transition-all shadow-md ${getRoleColorClasses(
-                          wp.role,
-                          isSelected
-                        )}`}
-                      >
-                        <IconComponent className="w-3.5 h-3.5 shrink-0" />
-                        <span className="text-[11px] truncate max-w-[110px] sm:max-w-[130px]">
-                          {wp.name.split(',')[0]}
+                      <div className="text-right">
+                        <span className="font-mono text-[10px] text-emerald-400 font-bold block">
+                          {wp.status}
                         </span>
-                        <span className="font-mono text-[9px] px-1 py-0.2 rounded bg-black/20">
-                          #{idx + 1}
+                        <span className="font-mono text-[9px] text-slate-500">
+                          {wp.timestamp}
                         </span>
                       </div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* Bottom Quick Legend */}
-              <div className="absolute bottom-3 left-3 z-10 hidden sm:flex items-center gap-3 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-slate-800 text-[10px] text-slate-300 font-mono backdrop-blur-xs">
-                <span className="flex items-center gap-1 text-emerald-400">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" /> Origin Farm
-                </span>
-                <span className="flex items-center gap-1 text-teal-400">
-                  <span className="w-2 h-2 rounded-full bg-teal-500" /> Solar Vault
-                </span>
-                <span className="flex items-center gap-1 text-purple-400">
-                  <span className="w-2 h-2 rounded-full bg-purple-500" /> Processing Mill
-                </span>
-                <span className="flex items-center gap-1 text-orange-400">
-                  <span className="w-2 h-2 rounded-full bg-orange-500" /> Retail Store
-                </span>
-              </div>
             </div>
+          )}
 
-            {/* Step Selector Slider Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
-              {waypoints.map((wp, idx) => {
-                const isSelected = activeStop === idx;
-                const IconComponent = getRoleIcon(wp.role);
-
-                return (
-                  <button
-                    key={wp.id}
-                    onClick={() => handlePointClick(idx)}
-                    className={`p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-emerald-50/90 border-emerald-500 ring-2 ring-emerald-400/30 shadow-2xs'
-                        : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[10px] font-bold text-slate-400">
-                      <span>Stop #{idx + 1}</span>
-                      <IconComponent className="w-3 h-3 text-slate-600" />
-                    </div>
-                    <h5 className="font-bold text-xs text-slate-900 truncate mt-1">
-                      {wp.name.split(',')[0]}
-                    </h5>
-                    <span className="text-[10px] text-emerald-700 font-mono font-semibold mt-1">
-                      {wp.temp}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Selected Waypoint Detailed Inspector Column (5 Cols on desktop) */}
-          <div className="lg:col-span-5 flex flex-col">
-            <div className="bg-slate-50/80 rounded-3xl border border-slate-200/90 p-5 md:p-6 space-y-4 h-full flex flex-col justify-between shadow-2xs">
-              <div>
-                {/* Stage Header */}
-                <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-200">
-                  <span
-                    className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${getRoleBadgeColor(
-                      currentWp.role
-                    )}`}
-                  >
-                    {currentWp.role} · Step #{activeStop + 1}
-                  </span>
-                  <span className="text-xs font-mono text-slate-500 font-medium">
-                    {new Date(currentWp.timestamp).toLocaleDateString()}
-                  </span>
-                </div>
-
-                {/* Location Title & Coordinates */}
-                <div className="mt-3 space-y-1">
-                  <h4 className="text-base md:text-lg font-extrabold text-slate-900 font-['Space_Grotesk',sans-serif]">
-                    {currentWp.name}
-                  </h4>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-500 font-mono">
-                    <MapPin className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                    <span>{currentWp.coordinates}</span>
-                  </div>
-                </div>
-
-                {/* Custodian & Organization Details */}
-                <div className="grid grid-cols-2 gap-2.5 mt-4 text-xs">
-                  <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                      Custodian / Actor
-                    </span>
-                    <span className="font-bold text-slate-800 mt-0.5 block truncate">
-                      {currentWp.actor}
-                    </span>
-                  </div>
-
-                  <div className="p-3 bg-white rounded-2xl border border-slate-200/80 shadow-2xs">
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">
-                      Organization
-                    </span>
-                    <span className="font-bold text-slate-800 mt-0.5 block truncate">
-                      {currentWp.organization}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Micro-climate Temperature & Power State */}
-                <div className="mt-3 p-3.5 rounded-2xl bg-teal-50/80 border border-teal-200/90 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-2xs">
-                      <Sun className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-teal-800 font-bold uppercase block">
-                        Micro-Climate State
-                      </span>
-                      <span className="text-xs font-extrabold text-teal-950 font-mono">
-                        {currentWp.temp}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-teal-200/80 text-teal-900">
-                    SAFE ENVELOPE
-                  </span>
-                </div>
-
-                {/* Handoff Notes */}
-                {currentWp.notes && (
-                  <div className="mt-3 p-3 rounded-2xl bg-white border border-slate-200/80 text-xs">
-                    <span className="text-slate-400 block text-[10px] font-bold uppercase mb-0.5">
-                      Custody Transition Notes
-                    </span>
-                    <p className="text-slate-700 italic">"{currentWp.notes}"</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Cryptographic Verification Seal */}
-              <div className="pt-3 border-t border-slate-200 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5 text-emerald-800 font-semibold">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                  <span>Tamper-Proof Audit Record</span>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  <button
-                    disabled={activeStop === 0}
-                    onClick={() => setActiveStop((s) => Math.max(0, s - 1))}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 disabled:opacity-40 border border-slate-200 rounded-lg text-xs font-bold transition-colors"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    disabled={activeStop === waypoints.length - 1}
-                    onClick={() => setActiveStop((s) => Math.min(waypoints.length - 1, s + 1))}
-                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white rounded-lg text-xs font-bold transition-colors"
-                  >
-                    Next Stop
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* Structured Corridor Flowchart View (Resilient Timeline Mode) */
-        <div className="space-y-4 animate-fadeIn">
-          <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-            <span className="font-semibold">
-              Step-by-step physical route breakdown from farm origin to consumer store.
+          {/* Bottom Waypoint Stepper Slider (Mobile & Desktop) */}
+          <div className="p-3 bg-slate-900/95 border-t border-slate-800 flex items-center justify-between gap-2 z-20">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider shrink-0 hidden sm:inline">
+              Transit Stops:
             </span>
-            <span className="font-mono text-emerald-700 font-bold">
-              {waypoints.length} Total Physical Transit Stages
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {waypoints.map((wp, idx) => {
-              const IconComponent = getRoleIcon(wp.role);
-
-              return (
-                <div
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
+              {waypoints.map((wp, i) => (
+                <button
                   key={wp.id}
-                  onClick={() => {
-                    handlePointClick(idx);
-                    setViewMode('map');
-                  }}
-                  className="p-5 rounded-2xl bg-white border border-slate-200 hover:border-emerald-500 hover:shadow-md transition-all cursor-pointer space-y-3 group"
+                  onClick={() => handleSelectPoint(i)}
+                  className={`px-2.5 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+                    i === activeIndex
+                      ? 'bg-emerald-600 text-white shadow-md'
+                      : 'bg-slate-800 text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border ${getRoleBadgeColor(
-                        wp.role
-                      )}`}
-                    >
-                      {wp.role} · Stage #{idx + 1}
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-400">
-                      {new Date(wp.timestamp).toLocaleDateString()}
-                    </span>
-                  </div>
-
-                  <div>
-                    <h5 className="font-bold text-sm text-slate-900 group-hover:text-emerald-700 transition-colors">
-                      {wp.name}
-                    </h5>
-                    <p className="text-xs text-slate-500 mt-0.5">Custodian: {wp.actor}</p>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                    <span className="font-mono text-teal-700 font-bold text-[11px]">
-                      {wp.temp}
-                    </span>
-                    <span className="text-emerald-700 font-semibold flex items-center gap-1 text-[11px]">
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Verified</span>
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+                  <span>{i + 1}</span>
+                  <span className="hidden md:inline truncate max-w-[80px]">{wp.name.split(',')[0]}</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
-      )}
+
+        {/* ========================================================================= */}
+        {/* RIGHT COLUMN: IN-DEPTH WAYPOINT INSPECTOR PANEL (5 COLS) */}
+        {/* ========================================================================= */}
+        <div className="lg:col-span-5 bg-slate-950 rounded-3xl border border-slate-800 p-5 space-y-4 flex flex-col justify-between shadow-xl">
+          <div className="space-y-4">
+            {/* Header: Step & Role */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-300 font-extrabold text-xs flex items-center justify-center font-mono border border-emerald-500/30">
+                  {activeIndex + 1}
+                </span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                  Transit Waypoint Inspection
+                </span>
+              </div>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
+                {activeWaypoint.role}
+              </span>
+            </div>
+
+            {/* Location Title & GPS Coordinates */}
+            <div>
+              <h4 className="text-base font-extrabold text-white">
+                {activeWaypoint.name}
+              </h4>
+              <div className="flex items-center gap-2 mt-1 text-xs text-emerald-400 font-mono">
+                <MapPin className="w-3.5 h-3.5 shrink-0" />
+                <span>{activeWaypoint.coordinates}</span>
+              </div>
+            </div>
+
+            {/* Custodian & Organization */}
+            <div className="p-3 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-1.5 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Authorized Custodian:</span>
+                <span className="font-bold text-white">{activeWaypoint.actor}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Organization:</span>
+                <span className="font-medium text-slate-300 truncate max-w-[170px]">{activeWaypoint.organization}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Recorded Timestamp:</span>
+                <span className="font-mono text-slate-400 text-[11px]">{activeWaypoint.timestamp}</span>
+              </div>
+            </div>
+
+            {/* Micro-Climate Temperature & Cold-Chain Status */}
+            <div className="p-3 bg-teal-950/70 rounded-2xl border border-teal-500/30 flex items-center justify-between text-xs font-mono">
+              <div className="flex items-center gap-2">
+                <Thermometer className="w-4 h-4 text-teal-400" />
+                <span className="font-bold text-teal-200">Micro-Climate:</span>
+              </div>
+              <span className="font-bold text-teal-300">{activeWaypoint.temp}</span>
+            </div>
+
+            {/* Handoff Custody Notes */}
+            <div className="space-y-1">
+              <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Custody Transition Notes:
+              </span>
+              <p className="text-xs text-slate-300 bg-slate-900/60 p-3 rounded-xl border border-slate-800/80 leading-relaxed">
+                {activeWaypoint.notes}
+              </p>
+            </div>
+          </div>
+
+          {/* Cryptographic Ledger Seal */}
+          <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-1.5 text-emerald-400 font-mono font-bold">
+              <ShieldCheck className="w-4 h-4" />
+              <span>SHA-256 Verified Ledger Seal</span>
+            </div>
+            <span className="text-slate-500 font-mono text-[10px]">
+              {activeWaypoint.evidenceCount} Verified Evidence Attachments
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

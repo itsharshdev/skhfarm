@@ -314,6 +314,21 @@ export interface OfflineSyncQueueItem {
   createdOfflineAt: string;
 }
 
+export interface OfflineFileRecord {
+  id: string;
+  batchId: string;
+  fileName: string;
+  fileType: 'PHOTO' | 'VIDEO' | 'CERTIFICATE' | 'DOCUMENT';
+  fileSizeBytes: number;
+  dataUrl: string;
+  capturedAt: string;
+  capturedBy: string;
+  captureLocation?: string;
+  tamperProofHash?: string;
+  syncStatus: 'PENDING_SYNC' | 'SYNCING' | 'SYNCED' | 'FAILED';
+  storageEngine: 'INDEXED_DB';
+}
+
 // Phase 4: Farmer Reputation & Badges
 export interface FarmerBadge {
   id: string;
@@ -413,5 +428,152 @@ export interface AIRiskAnalysisRecord {
   modelVersion: string;
   analyzedAt: string;
   createdAt: string;
+}
+
+// ==========================================
+// PS-1: DATA RESILIENCE & INTEGRITY TYPES
+// ==========================================
+
+export type IncidentState = 'NORMAL' | 'DEGRADED' | 'INCIDENT' | 'RECOVERY' | 'PARTIALLY_RECOVERED';
+
+export type RecordIntegrityStatus =
+  | 'VERIFIED'
+  | 'RECOVERED'
+  | 'PARTIALLY_RECOVERED'
+  | 'REQUIRES_REVIEW'
+  | 'UNRECOVERABLE'
+  | 'PENDING_SYNCHRONIZATION';
+
+export type InFlightOperationStatus =
+  | 'STARTED'
+  | 'VALIDATED'
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'INTERRUPTED'
+  | 'REQUIRES_REVIEW';
+
+export type ReconciliationState =
+  | 'MATCHED'
+  | 'SERVER_MISSING'
+  | 'LOCAL_MISSING'
+  | 'CONFLICT'
+  | 'REQUIRES_REVIEW';
+
+export interface DataIntegrityIncidentRecord {
+  incidentId: string;
+  state: IncidentState;
+  title: string;
+  description: string;
+  affectedBatchIds: string[];
+  recoverableCount: number;
+  partiallyRecoverableCount: number;
+  unrecoverableCount: number;
+  pendingOperationsCount: number;
+  requiresReviewCount: number;
+  initiatedAt: string;
+  resolvedAt?: string;
+  primaryDataStoreState: 'HEALTHY' | 'CORRUPTED' | 'UNREADABLE' | 'RESTORING' | 'RECONCILED';
+}
+
+export interface InFlightOperationRecord {
+  operationId: string;
+  batchId: string;
+  batchCode: string;
+  operationType: 'TRANSFER' | 'TRANSFORMATION' | 'STORAGE_UPDATE' | 'HANDOFF_CONFIRMATION' | 'EVIDENCE_SEAL';
+  status: InFlightOperationStatus;
+  startedAt: string;
+  steps: Array<{ stepName: string; status: 'SUCCESS' | 'WARNING' | 'FAILED' | 'PENDING'; detail?: string }>;
+  interruptionReason?: string;
+  canRetry: boolean;
+}
+
+// ==========================================
+// PS-2: INFORMATION & CLAIM VERIFICATION TYPES
+// ==========================================
+
+export type VerificationStatus =
+  | 'VERIFIED'
+  | 'SUPPORTED'
+  | 'UNVERIFIED'
+  | 'DISPUTED'
+  | 'CONTRADICTED_BY_RECORDS'
+  | 'INSUFFICIENT_EVIDENCE';
+
+export type VerificationFactorCategory =
+  | 'TEMPERATURE'
+  | 'COLD_CHAIN'
+  | 'TIMELINE'
+  | 'STORAGE'
+  | 'SOLAR_ENVIRONMENT'
+  | 'QUALITY'
+  | 'EVIDENCE'
+  | 'ROUTE'
+  | 'INSPECTION'
+  | 'CERTIFICATE'
+  | 'LINEAGE_DAG';
+
+export type VerificationRelationship =
+  | 'CONTRADICTS_CLAIM'
+  | 'SUPPORTS_CLAIM'
+  | 'CONTEXT_ONLY'
+  | 'INCONCLUSIVE';
+
+export interface VerificationFactor {
+  factorId: string;
+  name: string;
+  category: VerificationFactorCategory;
+  isAvailable: boolean;
+  observation: string;
+  relationship: VerificationRelationship;
+  evidenceRefId?: string;
+  timestamp?: string;
+}
+
+export interface ClaimEvidence {
+  evidenceId: string;
+  sourceType: VerificationFactorCategory;
+  title: string;
+  timestamp: string;
+  observation: string;
+  relationship: VerificationRelationship;
+  dataUnavailable?: boolean;
+}
+
+export interface Claim {
+  claimId: string;
+  batchId: string;
+  batchCode: string;
+  title: string;
+  claimStatement: string;
+  category:
+    | 'CONTAMINATION'
+    | 'COLD_CHAIN_FAILURE'
+    | 'TEMPERATURE_EXCURSION'
+    | 'STORAGE_FAILURE'
+    | 'TRANSPORT_INTERRUPTION'
+    | 'ORIGIN_MISREPRESENTATION'
+    | 'QUALITY_DEFECT'
+    | 'PROCESSING_TAMPERING'
+    | 'CERTIFICATION_FRAUD';
+  status: VerificationStatus;
+  submittedAt: string;
+  lastVerifiedAt: string;
+  reason: string;
+  factorSummary: {
+    contradictingCount: number;
+    supportingCount: number;
+    contextOnlyCount: number;
+    unavailableCount: number;
+  };
+  factors: VerificationFactor[];
+  missingEvidenceList?: string[];
+  isHumanReviewed?: boolean;
+  reviewerRole?: StakeholderRole;
+  reviewerName?: string;
+  reviewerNotes?: string;
+  isReviewerNotesPublic?: boolean;
+  reviewDecisionNotes?: string;
+  reviewedAt?: string;
+  attachedEvidenceRefs?: string[];
 }
 

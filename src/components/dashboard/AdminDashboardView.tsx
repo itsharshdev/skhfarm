@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Batch, StorageUnit, AppUser } from '../../types';
 import { traceService } from '../../services/traceService';
+import { DataRecoveryHubModal } from '../integrity/DataRecoveryHubModal';
 import {
   ShieldCheck,
   RotateCcw,
@@ -25,6 +26,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ user, on
   const [storageUnits, setStorageUnits] = useState<StorageUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [isResetting, setIsResetting] = useState(false);
+  const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -112,8 +114,16 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ user, on
 
           <div className="flex flex-wrap items-center gap-3">
             <button
+              onClick={() => setIsRecoveryModalOpen(true)}
+              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+            >
+              <Database className="w-3.5 h-3.5 text-blue-200" />
+              <span>Disaster Recovery Center</span>
+            </button>
+
+            <button
               onClick={handleSimulateQuickHarvest}
-              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl text-xs transition-all shadow-md flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-2xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Simulate Harvest Batch</span>
@@ -122,7 +132,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ user, on
             <button
               onClick={handleResetData}
               disabled={isResetting}
-              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl text-xs transition-all border border-white/20 flex items-center gap-1.5"
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white font-bold rounded-2xl text-xs transition-all border border-white/20 flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className={`w-3.5 h-3.5 ${isResetting ? 'animate-spin' : ''}`} />
               <span>Reset Demo State</span>
@@ -219,6 +229,12 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ user, on
           ))}
         </div>
       </div>
+
+      <DataRecoveryHubModal
+        isOpen={isRecoveryModalOpen}
+        onClose={() => setIsRecoveryModalOpen(false)}
+        onInspectBatch={onSelectBatch}
+      />
     </div>
   );
 };
