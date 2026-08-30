@@ -44,6 +44,7 @@ import { dataIntegrityService } from '../../services/dataIntegrityService';
 import { AIInsightsPanel } from '../ai/AIInsightsPanel';
 import { ClaimVerificationPanel } from '../verification/ClaimVerificationPanel';
 import { BatchQRModal } from '../operations/BatchQRModal';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
 
 interface PublicTraceViewProps {
   batch: Batch;
@@ -64,10 +65,10 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
     links: DEMO_LINEAGE_LINKS,
   });
 
-  // Selected node for slide-over drawer
   const [selectedNode, setSelectedNode] = useState<LineageNode | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [isQRModalOpen, setIsQRModalOpen] = useState<boolean>(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState<boolean>(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
   // Sync sub-tab from URL hash on mount & hashchange
@@ -513,11 +514,26 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
         {/* TAB 5: CONSUMER FEEDBACK & REVIEWS */}
         {activeTab === 'feedback' && (
           <div id="feedback-tab-content" className="space-y-6 animate-fadeIn">
+            {/* Reviews List Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  Stakeholder & Consumer Review Trail ({batch.feedbacks.length})
+                </h4>
+                <p className="text-xs text-slate-500">Permanent ratings stored in backend ledger for this produce batch.</p>
+              </div>
+
+              <button
+                onClick={() => setIsFeedbackModalOpen(true)}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs self-start sm:self-auto cursor-pointer"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Submit 100-Pt Feedback</span>
+              </button>
+            </div>
+
             {/* Reviews List */}
             <div>
-              <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-3">
-                Stakeholder & Consumer Review Trail
-              </h4>
               <div className="space-y-3">
                 {batch.feedbacks.map((fb) => (
                   <div
@@ -630,6 +646,18 @@ export const PublicTraceView: React.FC<PublicTraceViewProps> = ({
         batch={batch}
         onInspectBatch={onSelectBatch}
       />
+
+      {isFeedbackModalOpen && (
+        <UnifiedFeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+          initialBatchId={batch.batchId}
+          fromRole="CONSUMER"
+          targetRole={batch.currentOwnerRole}
+          targetEntityName={batch.originFarmerName || batch.currentOwner}
+          submittedBy="Verified Consumer"
+        />
+      )}
     </div>
   );
 };

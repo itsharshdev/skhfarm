@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Batch, AppUser } from '../../types';
 import { traceService } from '../../services/traceService';
 import { CameraEvidenceCaptureModal } from '../operations/CameraEvidenceCaptureModal';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import { TransferBatchModal } from '../operations/TransferBatchModal';
 import { BatchQRModal } from '../operations/BatchQRModal';
 import { StatusBadge } from '../common/StatusBadge';
@@ -19,6 +21,8 @@ import {
   Truck,
   Clock,
   ShieldCheck,
+  MessageSquare,
+  Award,
 } from 'lucide-react';
 
 interface ProcessorDashboardViewProps {
@@ -48,9 +52,10 @@ export const ProcessorDashboardView: React.FC<ProcessorDashboardViewProps> = ({
   const [isCameraModalOpen, setIsCameraModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Transfer & QR modals
+  // Transfer, QR & Feedback modals
   const [transferBatch, setTransferBatch] = useState<Batch | null>(null);
   const [qrBatch, setQrBatch] = useState<Batch | null>(null);
+  const [feedbackBatch, setFeedbackBatch] = useState<Batch | null>(null);
 
   useEffect(() => {
     loadData();
@@ -240,19 +245,30 @@ export const ProcessorDashboardView: React.FC<ProcessorDashboardViewProps> = ({
                 </div>
 
                 {/* Actions */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    onClick={() => setQrBatch(batch)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>QR</span>
-                  </button>
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => setQrBatch(batch)}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1 cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>QR</span>
+                    </button>
+
+                    <button
+                      onClick={() => setFeedbackBatch(batch)}
+                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-xs flex items-center gap-1 border border-amber-200/80 cursor-pointer"
+                      title="Rate Raw Material Supplier / Mandi"
+                    >
+                      <Award className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Rate</span>
+                    </button>
+                  </div>
 
                   <button
                     id={`processor-transfer-btn-${batch.batchId}`}
                     onClick={() => setTransferBatch(batch)}
-                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-2xs"
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
                   >
                     <Truck className="w-3.5 h-3.5" />
                     <span>Transfer to Retail</span>
@@ -263,6 +279,14 @@ export const ProcessorDashboardView: React.FC<ProcessorDashboardViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Processor Feedback & Reputation Hub */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="PROCESSOR"
+        batches={batches.length > 0 ? batches : allBatches}
+        onSelectBatch={onSelectBatch}
+      />
 
       {/* Transformation Modal */}
       {isTransformModalOpen && (
@@ -481,6 +505,19 @@ export const ProcessorDashboardView: React.FC<ProcessorDashboardViewProps> = ({
           onClose={() => setQrBatch(null)}
           batch={qrBatch}
           onInspectBatch={onSelectBatch}
+        />
+      )}
+
+      {feedbackBatch && (
+        <UnifiedFeedbackModal
+          isOpen={!!feedbackBatch}
+          onClose={() => setFeedbackBatch(null)}
+          initialBatchId={feedbackBatch.batchId}
+          fromRole="PROCESSOR"
+          targetRole="MANDI"
+          targetEntityName="Mandi Aggregation Hub"
+          submittedBy={user.name}
+          onFeedbackSubmitted={loadData}
         />
       )}
     </div>

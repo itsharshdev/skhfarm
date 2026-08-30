@@ -5,6 +5,7 @@ import { alertService } from '../../services/alertService';
 import { StatusBadge } from '../common/StatusBadge';
 import { RiskAlertCenter } from '../safety/RiskAlertCenter';
 import { DataRecoveryHubModal } from '../integrity/DataRecoveryHubModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -310,6 +311,14 @@ export const AuthorityDashboardView: React.FC<AuthorityDashboardViewProps> = ({
         </div>
       </div>
       )}
+
+      {/* Regulatory Stakeholder Feedback & Audit Hub */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="AUTHORITY"
+        batches={batches}
+        onSelectBatch={onSelectBatch}
+      />
 
       {/* Audit Decision Modal */}
       {auditBatch && (

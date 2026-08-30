@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Batch, AppUser } from '../../types';
 import { traceService } from '../../services/traceService';
 import { BatchQRModal } from '../operations/BatchQRModal';
-import { HandoffFeedbackModal } from '../operations/HandoffFeedbackModal';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import { StatusBadge } from '../common/StatusBadge';
 import {
   Store,
@@ -15,6 +16,8 @@ import {
   Clock,
   Sparkles,
   ShoppingBag,
+  MessageSquare,
+  Award,
 } from 'lucide-react';
 
 interface RetailerDashboardViewProps {
@@ -224,20 +227,29 @@ export const RetailerDashboardView: React.FC<RetailerDashboardViewProps> = ({
               </div>
 
               {/* Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
                 <button
                   onClick={() => setQrBatch(batch)}
-                  className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-2xs"
+                  className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
                 >
                   <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Shelf QR Card</span>
+                  <span>Shelf QR</span>
+                </button>
+
+                <button
+                  onClick={() => setFeedbackBatch(batch)}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-amber-200/80 cursor-pointer"
+                  title="Rate Supplier Freshness & Packaging"
+                >
+                  <Award className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Rate</span>
                 </button>
 
                 <button
                   onClick={() => onSelectBatch(batch.batchId)}
-                  className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-rose-200"
+                  className="flex-1 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-rose-200 cursor-pointer"
                 >
-                  <span>Consumer Trace</span>
+                  <span>Trace</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
@@ -245,6 +257,14 @@ export const RetailerDashboardView: React.FC<RetailerDashboardViewProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Retailer Feedback & Supplier Freshness Hub */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="RETAILER"
+        batches={batches.length > 0 ? batches : incomingBatches}
+        onSelectBatch={onSelectBatch}
+      />
 
       {/* Modals */}
       {qrBatch && (
@@ -257,12 +277,13 @@ export const RetailerDashboardView: React.FC<RetailerDashboardViewProps> = ({
       )}
 
       {feedbackBatch && (
-        <HandoffFeedbackModal
+        <UnifiedFeedbackModal
           isOpen={!!feedbackBatch}
           onClose={() => setFeedbackBatch(null)}
-          batchId={feedbackBatch.batchId}
+          initialBatchId={feedbackBatch.batchId}
           fromRole="RETAILER"
-          toRole="PROCESSOR"
+          targetRole="PROCESSOR"
+          targetEntityName="Distributor & Processor"
           submittedBy={user.name}
           onFeedbackSubmitted={loadData}
         />

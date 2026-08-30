@@ -5,6 +5,8 @@ import { StorageConditionUpdateModal } from '../operations/StorageConditionUpdat
 import { StorageUnitDetailModal } from '../operations/StorageUnitDetailModal';
 import { TransferBatchModal } from '../operations/TransferBatchModal';
 import { CameraEvidenceCaptureModal } from '../operations/CameraEvidenceCaptureModal';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import { BatchQRModal } from '../operations/BatchQRModal';
 import { StatusBadge } from '../common/StatusBadge';
 import {
@@ -21,6 +23,8 @@ import {
   Clock,
   CheckCircle2,
   RefreshCw,
+  MessageSquare,
+  Award,
 } from 'lucide-react';
 
 interface WarehouseDashboardViewProps {
@@ -42,6 +46,7 @@ export const WarehouseDashboardView: React.FC<WarehouseDashboardViewProps> = ({
   const [conditionModalBatch, setConditionModalBatch] = useState<Batch | null>(null);
   const [transferBatch, setTransferBatch] = useState<Batch | null>(null);
   const [qrBatch, setQrBatch] = useState<Batch | null>(null);
+  const [feedbackBatch, setFeedbackBatch] = useState<Batch | null>(null);
   const [assignStorageBatch, setAssignStorageBatch] = useState<Batch | null>(null);
   const [selectedUnitIdToAssign, setSelectedUnitIdToAssign] = useState<string>('');
 
@@ -326,20 +331,30 @@ export const WarehouseDashboardView: React.FC<WarehouseDashboardViewProps> = ({
               </div>
 
               {/* Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
                 <button
                   id={`update-telemetry-btn-${batch.batchId}`}
                   onClick={() => setConditionModalBatch(batch)}
-                  className="flex-1 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-teal-200"
+                  className="flex-1 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-teal-200 cursor-pointer"
                 >
                   <Thermometer className="w-3.5 h-3.5 text-teal-700" />
-                  <span>Log Telemetry</span>
+                  <span>Telemetry</span>
+                </button>
+
+                <button
+                  id={`warehouse-rate-btn-${batch.batchId}`}
+                  onClick={() => setFeedbackBatch(batch)}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-amber-200/80 cursor-pointer"
+                  title="Rate Intake Quality & Transport Condition"
+                >
+                  <Award className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Rate</span>
                 </button>
 
                 <button
                   id={`warehouse-transfer-btn-${batch.batchId}`}
                   onClick={() => setTransferBatch(batch)}
-                  className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-2xs"
+                  className="flex-1 py-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
                 >
                   <ArrowRight className="w-3.5 h-3.5 text-teal-400" />
                   <span>Dispatch</span>
@@ -349,6 +364,14 @@ export const WarehouseDashboardView: React.FC<WarehouseDashboardViewProps> = ({
           ))}
         </div>
       </div>
+
+      {/* Warehouse / Cold Storage Feedback & Reputation Hub */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="WAREHOUSE"
+        batches={batches.length > 0 ? batches : incomingBatches}
+        onSelectBatch={onSelectBatch}
+      />
 
       {/* Assign Storage Modal */}
       {assignStorageBatch && (
@@ -431,6 +454,19 @@ export const WarehouseDashboardView: React.FC<WarehouseDashboardViewProps> = ({
           currentRole="WAREHOUSE"
           currentUserName={user.name}
           onTransferComplete={loadData}
+        />
+      )}
+
+      {feedbackBatch && (
+        <UnifiedFeedbackModal
+          isOpen={!!feedbackBatch}
+          onClose={() => setFeedbackBatch(null)}
+          initialBatchId={feedbackBatch.batchId}
+          fromRole="WAREHOUSE"
+          targetRole="TRANSPORTER"
+          targetEntityName="Reefer Logistics Carrier"
+          submittedBy={user.name}
+          onFeedbackSubmitted={loadData}
         />
       )}
     </div>

@@ -3,7 +3,8 @@ import { Batch, AppUser } from '../../types';
 import { traceService } from '../../services/traceService';
 import { CameraEvidenceCaptureModal } from '../operations/CameraEvidenceCaptureModal';
 import { TransferBatchModal } from '../operations/TransferBatchModal';
-import { HandoffFeedbackModal } from '../operations/HandoffFeedbackModal';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import { StatusBadge } from '../common/StatusBadge';
 import {
   Truck,
@@ -16,6 +17,8 @@ import {
   Navigation,
   Clock,
   Sparkles,
+  MessageSquare,
+  Award,
 } from 'lucide-react';
 
 interface TransporterDashboardViewProps {
@@ -158,18 +161,27 @@ export const TransporterDashboardView: React.FC<TransporterDashboardViewProps> =
               </div>
 
               {/* Transit Actions */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1.5">
                 <button
                   onClick={() => handleLogTransitCheckpoint(batch)}
-                  className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1"
+                  className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center justify-center gap-1 cursor-pointer"
                 >
                   <Navigation className="w-3.5 h-3.5 text-amber-700" />
-                  <span>Log Checkpoint</span>
+                  <span>Checkpoint</span>
+                </button>
+
+                <button
+                  onClick={() => setFeedbackBatch(batch)}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 border border-amber-200/80 cursor-pointer"
+                  title="Rate Loading/Unloading Facility & Turnaround"
+                >
+                  <Award className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Rate</span>
                 </button>
 
                 <button
                   onClick={() => setEvidenceModalBatch(batch)}
-                  className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl"
+                  className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
                   title="Capture live proof"
                 >
                   <Camera className="w-3.5 h-3.5" />
@@ -177,7 +189,7 @@ export const TransporterDashboardView: React.FC<TransporterDashboardViewProps> =
 
                 <button
                   onClick={() => setTransferBatch(batch)}
-                  className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-2xs"
+                  className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1 shadow-2xs cursor-pointer"
                 >
                   <ArrowRight className="w-3.5 h-3.5" />
                   <span>Deliver</span>
@@ -187,6 +199,14 @@ export const TransporterDashboardView: React.FC<TransporterDashboardViewProps> =
           ))}
         </div>
       </div>
+
+      {/* Transporter Feedback & Gate Turnaround Ratings */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="TRANSPORTER"
+        batches={batches}
+        onSelectBatch={onSelectBatch}
+      />
 
       {/* Modals */}
       {evidenceModalBatch && (
@@ -215,6 +235,19 @@ export const TransporterDashboardView: React.FC<TransporterDashboardViewProps> =
           currentRole="TRANSPORTER"
           currentUserName={user.name}
           onTransferComplete={loadData}
+        />
+      )}
+
+      {feedbackBatch && (
+        <UnifiedFeedbackModal
+          isOpen={!!feedbackBatch}
+          onClose={() => setFeedbackBatch(null)}
+          initialBatchId={feedbackBatch.batchId}
+          fromRole="TRANSPORTER"
+          targetRole="WAREHOUSE"
+          targetEntityName="Cold Storage & Mandi Facilities"
+          submittedBy={user.name}
+          onFeedbackSubmitted={loadData}
         />
       )}
     </div>

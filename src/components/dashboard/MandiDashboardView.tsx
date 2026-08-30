@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Batch, AppUser } from '../../types';
 import { traceService } from '../../services/traceService';
 import { CameraEvidenceCaptureModal } from '../operations/CameraEvidenceCaptureModal';
-import { HandoffFeedbackModal } from '../operations/HandoffFeedbackModal';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import { TransferBatchModal } from '../operations/TransferBatchModal';
 import { BatchQRModal } from '../operations/BatchQRModal';
 import { StatusBadge } from '../common/StatusBadge';
@@ -20,6 +21,8 @@ import {
   Clock,
   Sparkles,
   MapPin,
+  MessageSquare,
+  Plus,
 } from 'lucide-react';
 
 interface MandiDashboardViewProps {
@@ -99,12 +102,23 @@ export const MandiDashboardView: React.FC<MandiDashboardViewProps> = ({ user, on
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="p-3 rounded-2xl bg-white/10 border border-white/10 text-center min-w-[110px]">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => {
+                if (batches[0]) setFeedbackBatch(batches[0]);
+                else if (incomingBatches[0]) setFeedbackBatch(incomingBatches[0]);
+              }}
+              className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-2xl text-xs transition-all shadow-md flex items-center gap-1.5 cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Give Feedback / Rating</span>
+            </button>
+
+            <div className="p-3 rounded-2xl bg-white/10 border border-white/10 text-center min-w-[100px]">
               <span className="text-[10px] text-teal-300 uppercase font-bold block">Intake Today</span>
               <span className="text-xl font-extrabold font-mono text-white">480 Q</span>
             </div>
-            <div className="p-3 rounded-2xl bg-white/10 border border-white/10 text-center min-w-[110px]">
+            <div className="p-3 rounded-2xl bg-white/10 border border-white/10 text-center min-w-[100px]">
               <span className="text-[10px] text-emerald-300 uppercase font-bold block">Avg Rating</span>
               <span className="text-xl font-extrabold font-mono text-white">95/100</span>
             </div>
@@ -277,6 +291,14 @@ export const MandiDashboardView: React.FC<MandiDashboardViewProps> = ({ user, on
         </div>
       </div>
 
+      {/* Mandi Feedback & Reputation Hub */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="MANDI"
+        batches={batches.length > 0 ? batches : incomingBatches}
+        onSelectBatch={onSelectBatch}
+      />
+
       {/* Modals */}
       {evidenceModalBatch && (
         <CameraEvidenceCaptureModal
@@ -297,12 +319,13 @@ export const MandiDashboardView: React.FC<MandiDashboardViewProps> = ({ user, on
       )}
 
       {feedbackBatch && (
-        <HandoffFeedbackModal
+        <UnifiedFeedbackModal
           isOpen={!!feedbackBatch}
           onClose={() => setFeedbackBatch(null)}
-          batchId={feedbackBatch.batchId}
+          initialBatchId={feedbackBatch.batchId}
           fromRole="MANDI"
-          toRole="FARMER"
+          targetRole="FARMER"
+          targetEntityName={feedbackBatch.originFarmerName || 'Farmer Producer'}
           submittedBy={user.name}
           onFeedbackSubmitted={loadData}
         />

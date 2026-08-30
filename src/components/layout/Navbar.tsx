@@ -5,6 +5,7 @@ import { Language } from '../../i18n/translations';
 import { offlineSyncService } from '../../services/offlineSyncService';
 import { FarmTracerLogo } from '../brand/FarmTracerLogo';
 import { StakeholderRole } from '../../types';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
 import {
   Shield,
   QrCode,
@@ -28,6 +29,7 @@ import {
   UserCog,
   Sparkles,
   Check,
+  MessageSquare,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -55,6 +57,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onSearchBatch, onNavigateHome, o
   const [quickSearch, setQuickSearch] = useState('');
   const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
   const langMenuRef = useRef<HTMLDivElement | null>(null);
   const roleMenuRef = useRef<HTMLDivElement | null>(null);
@@ -148,12 +151,23 @@ export const Navbar: React.FC<NavbarProps> = ({ onSearchBatch, onNavigateHome, o
           </form>
 
           {/* Right Action Controls */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 shrink-0">
+            {/* Feedback / Rate Button */}
+            <button
+              id="navbar-feedback-btn"
+              onClick={() => setIsFeedbackModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/80 hover:bg-amber-100 font-semibold text-xs transition-all shadow-2xs cursor-pointer"
+              title="Submit Stakeholder Feedback or Rate Produce"
+            >
+              <MessageSquare className="w-3.5 h-3.5 text-amber-700" />
+              <span className="hidden md:inline">Feedback</span>
+            </button>
+
             {/* Scan QR Button */}
             <button
               id="navbar-scan-qr-btn"
               onClick={() => setScannerOpen(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 font-semibold text-xs md:text-sm transition-all shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200/80 hover:bg-emerald-100 font-semibold text-xs md:text-sm transition-all shadow-2xs cursor-pointer"
             >
               <QrCode className="w-4 h-4 text-emerald-700" />
               <span className="hidden sm:inline">Scan QR</span>
@@ -310,7 +324,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onSearchBatch, onNavigateHome, o
               <button
                 id="navbar-login-btn"
                 onClick={() => setLoginModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs md:text-sm transition-all shadow-xs"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs md:text-sm transition-all shadow-xs cursor-pointer"
               >
                 <User className="w-3.5 h-3.5 text-slate-300" />
                 <span>Stakeholder Login</span>
@@ -319,6 +333,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onSearchBatch, onNavigateHome, o
           </div>
         </div>
       </div>
+
+      {isFeedbackModalOpen && (
+        <UnifiedFeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+          initialBatchId="BIS-2026-092"
+          fromRole={currentUser?.role || 'CONSUMER'}
+          targetRole={currentUser?.role === 'FARMER' ? 'MANDI' : currentUser?.role === 'MANDI' ? 'FARMER' : 'FARMER'}
+          targetEntityName={currentUser?.role === 'FARMER' ? 'Mandi Aggregation Hub' : 'Origin Producer Farm'}
+          submittedBy={currentUser?.name || 'Guest User'}
+        />
+      )}
     </header>
   );
 };

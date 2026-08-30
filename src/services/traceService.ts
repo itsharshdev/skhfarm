@@ -2,6 +2,7 @@ import {
   Batch,
   StorageUnit,
   FeedbackRecord,
+  FeedbackCategory,
   EvidenceRecord,
   SupplyChainEvent,
   StorageCondition,
@@ -15,6 +16,7 @@ import {
 import { supabase } from './supabaseClient';
 import { ALL_DEMO_BATCHES, MOCK_STORAGE_UNITS, DEMO_LINEAGE_NODES, DEMO_LINEAGE_LINKS } from '../data/mockData';
 import { calculateBatchScore } from './scoreService';
+import { indexedDbService } from './indexedDbService';
 
 
 export interface CreateBatchInput {
@@ -60,6 +62,19 @@ export interface TransformBatchInput {
     previewUrl: string;
     captureType: 'PHOTO' | 'VIDEO';
   };
+}
+
+export interface SubmitFeedbackInput {
+  fromRole: StakeholderRole;
+  toRole: StakeholderRole;
+  category: FeedbackCategory;
+  score: number;
+  comment: string;
+  submittedBy: string;
+  targetEntityName?: string;
+  tags?: string[];
+  attachmentUrl?: string;
+  voiceNoteDurationSec?: number;
 }
 
 export interface ITraceService {
@@ -119,26 +134,24 @@ export interface ITraceService {
       notes?: string;
     }
   ): Promise<EvidenceRecord>;
-  submitFeedback(
-    batchId: string,
-    feedback: {
-      fromRole: StakeholderRole;
-      toRole: StakeholderRole;
-      category: 'QUALITY' | 'ACCURACY' | 'PACKAGING' | 'HANDLING' | 'TIMELINESS' | 'CONDITION' | 'TRACEABILITY' | 'OVERALL';
-      score: number;
-      comment: string;
-      submittedBy: string;
-    }
-  ): Promise<FeedbackRecord>;
+  submitFeedback(batchId: string, feedback: SubmitFeedbackInput): Promise<FeedbackRecord>;
   submitConsumerFeedback(
     batchId: string,
     feedback: {
-      category: 'QUALITY' | 'ACCURACY' | 'PACKAGING' | 'HANDLING' | 'TRACEABILITY' | 'OVERALL';
+      category: FeedbackCategory;
       score: number;
       comment: string;
       submittedBy?: string;
+      tags?: string[];
+      attachmentUrl?: string;
     }
   ): Promise<FeedbackRecord>;
+  getAllFeedbacks(filter?: { role?: StakeholderRole; batchId?: string }): Promise<FeedbackRecord[]>;
+  getFeedbacksForRole(
+    role: StakeholderRole,
+    userName?: string
+  ): Promise<{ received: FeedbackRecord[]; given: FeedbackRecord[]; avgScore: number; count: number }>;
+  getFeedbacksForBatch(batchId: string): Promise<FeedbackRecord[]>;
   verifyBatchAsAuthority(
     batchId: string,
     inspectorName: string,
@@ -1320,55 +1333,97 @@ class SupabaseTraceService implements ITraceService {
     return newEvidence;
   }
 
-  public async submitFeedback(
-    batchId: string,
-    feedback: {
-      fromRole: StakeholderRole;
-      toRole: StakeholderRole;
-      category: 'QUALITY' | 'ACCURACY' | 'PACKAGING' | 'HANDLING' | 'TIMELINESS' | 'CONDITION' | 'TRACEABILITY' | 'OVERALL';
-      score: number;
-      comment: string;
-      submittedBy: string;
-    }
-  ): Promise<FeedbackRecord> {
+  public async submitFeedback(batchId: string, feedback: SubmitFeedbackInput): Promise<FeedbackRecord> {
     const timestamp = new Date().toISOString();
     const feedbackCode = `FB-${Date.now().toString().slice(-6)}`;
+    const ratingStars = Math.min(5, Math.max(1, Math.round((feedback.score / 100) * 5)));
+    const sentiment: 'POSITIVE' | 'NEUTRAL' | 'CRITICAL' =
+      feedback.score >= 80 ? 'POSITIVE' : feedback.score >= 60 ? 'NEUTRAL' : 'CRITICAL';
+
     const feedbackRecord: FeedbackRecord = {
       feedbackId: feedbackCode,
-      batchId,
+      batchId: batchId || 'GENERAL',
       eventId: `EVT-FB-${Date.now().toString().slice(-4)}`,
       fromRole: feedback.fromRole,
       toRole: feedback.toRole,
       submittedBy: feedback.submittedBy,
+      targetEntityName: feedback.targetEntityName,
       category: feedback.category,
       score: feedback.score,
+      ratingStars,
       comment: feedback.comment,
+      tags: feedback.tags || [],
+      sentiment,
+      attachmentUrl: feedback.attachmentUrl,
+      voiceNoteDurationSec: feedback.voiceNoteDurationSec,
       createdAt: timestamp,
       status: 'PUBLISHED',
     };
 
-    // 1. Insert into feedbacks table
-    await supabase.from('feedbacks').insert({
-      feedback_code: feedbackCode,
-      batch_code: batchId,
-      from_role: feedback.fromRole,
-      to_role: feedback.toRole,
-      submitted_by: feedback.submittedBy,
-      category: feedback.category,
-      score: feedback.score,
-      comment: feedback.comment,
-      status: 'PUBLISHED',
-    });
+    // 1. Insert into feedbacks table (safely in Supabase)
+    try {
+      await supabase.from('feedbacks').insert({
+        feedback_code: feedbackCode,
+        batch_code: batchId || 'GENERAL',
+        from_role: feedback.fromRole,
+        to_role: feedback.toRole,
+        submitted_by: feedback.submittedBy,
+        category: feedback.category,
+        score: feedback.score,
+        comment: feedback.comment,
+        status: 'PUBLISHED',
+      });
+    } catch (err) {
+      console.warn('Supabase feedback insert non-fatal warning:', err);
+    }
 
-    // 2. Log Audit Entry
-    await supabase.from('audit_logs').insert({
-      action: 'FEEDBACK_SUBMITTED',
-      actor_name: feedback.submittedBy,
-      actor_role: feedback.fromRole,
-      entity_type: 'FEEDBACK',
-      entity_id: feedbackCode,
-      details: { batchCode: batchId, score: feedback.score, category: feedback.category },
-    });
+    // 2. Log Audit Entry in Supabase audit_logs
+    try {
+      await supabase.from('audit_logs').insert({
+        action: 'FEEDBACK_SUBMITTED',
+        actor_name: feedback.submittedBy,
+        actor_role: feedback.fromRole,
+        entity_type: 'FEEDBACK',
+        entity_id: feedbackCode,
+        details: {
+          batchCode: batchId,
+          score: feedback.score,
+          category: feedback.category,
+          toRole: feedback.toRole,
+          targetEntityName: feedback.targetEntityName,
+        },
+      });
+    } catch (err) {
+      console.warn('Supabase audit log insert non-fatal warning:', err);
+    }
+
+    // 3. Update in-memory batch & recalculate dynamic 100-pt explainable score
+    if (batchId && ALL_DEMO_BATCHES[batchId]) {
+      const b = ALL_DEMO_BATCHES[batchId];
+      if (!b.feedbacks) b.feedbacks = [];
+      b.feedbacks.unshift(feedbackRecord);
+      b.scoreBreakdown = calculateBatchScore({
+        origin: b.origin,
+        originFarmerName: b.originFarmerName,
+        category: b.category,
+        variety: b.variety,
+        productionDate: b.productionDate,
+        expiryDate: b.expiryDate,
+        parentBatchIds: b.parentBatchIds,
+        events: b.events,
+        evidences: b.evidences,
+        feedbacks: b.feedbacks,
+        certificates: b.certificates,
+        currentStorage: b.currentStorage,
+        contaminationFlag: b.contaminationFlag,
+      });
+
+      try {
+        await indexedDbService.cacheBatches(Object.values(ALL_DEMO_BATCHES));
+      } catch (e) {
+        // ignore offline cache warning
+      }
+    }
 
     this.notify();
     return feedbackRecord;
@@ -1377,10 +1432,12 @@ class SupabaseTraceService implements ITraceService {
   public async submitConsumerFeedback(
     batchId: string,
     feedback: {
-      category: 'QUALITY' | 'ACCURACY' | 'PACKAGING' | 'HANDLING' | 'TRACEABILITY' | 'OVERALL';
+      category: FeedbackCategory;
       score: number;
       comment: string;
       submittedBy?: string;
+      tags?: string[];
+      attachmentUrl?: string;
     }
   ): Promise<FeedbackRecord> {
     return this.submitFeedback(batchId, {
@@ -1390,7 +1447,97 @@ class SupabaseTraceService implements ITraceService {
       score: feedback.score,
       comment: feedback.comment,
       submittedBy: feedback.submittedBy || 'Verified Consumer',
+      tags: feedback.tags,
+      attachmentUrl: feedback.attachmentUrl,
     });
+  }
+
+  public async getAllFeedbacks(filter?: { role?: StakeholderRole; batchId?: string }): Promise<FeedbackRecord[]> {
+    const feedbackMap = new Map<string, FeedbackRecord>();
+
+    // 1. Gather all in-memory feedbacks from all demo batches
+    Object.values(ALL_DEMO_BATCHES).forEach((b) => {
+      (b.feedbacks || []).forEach((f) => {
+        feedbackMap.set(f.feedbackId, f);
+      });
+    });
+
+    // 2. Query Supabase feedbacks table if available
+    try {
+      let query = supabase.from('feedbacks').select('*').order('created_at', { ascending: false });
+      if (filter?.batchId) {
+        query = query.eq('batch_code', filter.batchId);
+      }
+      const { data: dbFeedbacks } = await query;
+      if (dbFeedbacks && dbFeedbacks.length > 0) {
+        dbFeedbacks.forEach((f: any) => {
+          const id = f.feedback_code || f.id;
+          const score = Number(f.score) || 90;
+          feedbackMap.set(id, {
+            feedbackId: id,
+            batchId: f.batch_code || 'GENERAL',
+            eventId: f.event_code || undefined,
+            fromRole: f.from_role,
+            toRole: f.to_role,
+            submittedBy: f.submitted_by,
+            category: f.category,
+            score,
+            ratingStars: Math.min(5, Math.max(1, Math.round((score / 100) * 5))),
+            comment: f.comment,
+            sentiment: score >= 80 ? 'POSITIVE' : score >= 60 ? 'NEUTRAL' : 'CRITICAL',
+            createdAt: f.created_at || new Date().toISOString(),
+            status: f.status || 'PUBLISHED',
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('getAllFeedbacks Supabase warning:', e);
+    }
+
+    let result = Array.from(feedbackMap.values());
+    if (filter?.role) {
+      result = result.filter((f) => f.fromRole === filter.role || f.toRole === filter.role);
+    }
+    if (filter?.batchId) {
+      result = result.filter((f) => f.batchId === filter.batchId);
+    }
+
+    result.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return result;
+  }
+
+  public async getFeedbacksForRole(
+    role: StakeholderRole,
+    userName?: string
+  ): Promise<{ received: FeedbackRecord[]; given: FeedbackRecord[]; avgScore: number; count: number }> {
+    const all = await this.getAllFeedbacks();
+    const received = all.filter((f) => {
+      if (f.toRole === role) return true;
+      if (userName && f.targetEntityName && f.targetEntityName.toLowerCase().includes(userName.toLowerCase())) return true;
+      return false;
+    });
+
+    const given = all.filter((f) => {
+      if (f.fromRole === role) return true;
+      if (userName && f.submittedBy && f.submittedBy.toLowerCase().includes(userName.toLowerCase())) return true;
+      return false;
+    });
+
+    const avgScore =
+      received.length > 0 ? Math.round(received.reduce((acc, f) => acc + f.score, 0) / received.length) : 95;
+
+    return {
+      received,
+      given,
+      avgScore,
+      count: received.length,
+    };
+  }
+
+  public async getFeedbacksForBatch(batchId: string): Promise<FeedbackRecord[]> {
+    const b = await this.getBatchById(batchId);
+    if (!b) return [];
+    return b.feedbacks || [];
   }
 
   public async verifyBatchAsAuthority(

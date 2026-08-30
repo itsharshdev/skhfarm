@@ -106,16 +106,35 @@ export interface EvidenceRecord {
   };
 }
 
+export type FeedbackCategory =
+  | 'QUALITY'
+  | 'ACCURACY'
+  | 'PACKAGING'
+  | 'HANDLING'
+  | 'TIMELINESS'
+  | 'CONDITION'
+  | 'TRACEABILITY'
+  | 'PRICE_TRANSPARENCY'
+  | 'PAYMENT_SPEED'
+  | 'WEIGHMENT'
+  | 'OVERALL';
+
 export interface FeedbackRecord {
   feedbackId: string;
   batchId: string;
-  eventId: string;
+  eventId?: string;
   fromRole: StakeholderRole;
   toRole: StakeholderRole;
   submittedBy: string;
-  category: 'QUALITY' | 'ACCURACY' | 'PACKAGING' | 'HANDLING' | 'TIMELINESS' | 'CONDITION' | 'TRACEABILITY' | 'OVERALL';
+  targetEntityName?: string;
+  category: FeedbackCategory;
   score: number; // 0 - 100
+  ratingStars?: number; // 1 - 5
   comment: string;
+  tags?: string[];
+  sentiment?: 'POSITIVE' | 'NEUTRAL' | 'CRITICAL';
+  attachmentUrl?: string;
+  voiceNoteDurationSec?: number;
   createdAt: string;
   status: 'PUBLISHED' | 'FLAGGED';
 }

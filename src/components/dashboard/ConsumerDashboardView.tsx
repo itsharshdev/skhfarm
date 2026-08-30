@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { User, Batch } from '../../types';
 import { useAuthRole } from '../../context/AuthRoleContext';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
+import { StakeholderFeedbackHub } from '../operations/StakeholderFeedbackHub';
 import {
   QrCode,
   Sparkles,
@@ -17,6 +19,7 @@ import {
   Wheat,
   Apple,
   Award,
+  Plus,
 } from 'lucide-react';
 import { DEMO_SCENARIOS } from '../trace/DemoScenarioBar';
 
@@ -31,6 +34,7 @@ export const ConsumerDashboardView: React.FC<ConsumerDashboardViewProps> = ({
 }) => {
   const { setScannerOpen } = useAuthRole();
   const [searchQuery, setSearchQuery] = useState('');
+  const [feedbackBatchId, setFeedbackBatchId] = useState<string | null>(null);
 
   const recentScans = [
     {
@@ -88,11 +92,19 @@ export const ConsumerDashboardView: React.FC<ConsumerDashboardViewProps> = ({
 
         <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
           <button
+            onClick={() => setFeedbackBatchId('BIS-2026-092')}
+            className="w-full sm:w-auto px-4 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl font-bold text-xs md:text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Rate a Product / Farmer</span>
+          </button>
+
+          <button
             onClick={() => setScannerOpen(true)}
-            className="w-full sm:w-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs md:text-sm transition-all shadow-xs flex items-center justify-center gap-2"
+            className="w-full sm:w-auto px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold text-xs md:text-sm transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer"
           >
             <QrCode className="w-4 h-4" />
-            <span>Scan Product QR Code</span>
+            <span>Scan Product QR</span>
           </button>
         </div>
       </div>
@@ -227,7 +239,7 @@ export const ConsumerDashboardView: React.FC<ConsumerDashboardViewProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 self-start sm:self-auto">
+              <div className="flex items-center gap-2 self-start sm:self-auto">
                 <span
                   className={`font-mono text-xs font-bold px-2.5 py-1 rounded-xl ${
                     scan.score >= 90
@@ -237,14 +249,46 @@ export const ConsumerDashboardView: React.FC<ConsumerDashboardViewProps> = ({
                 >
                   {scan.score}/100 Score
                 </span>
-                <button className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 text-xs font-bold text-slate-700 rounded-xl transition-colors">
-                  View Full DAG
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFeedbackBatchId(scan.batchId);
+                  }}
+                  className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 font-bold text-xs rounded-xl transition-colors flex items-center gap-1 cursor-pointer"
+                  title="Rate Farmer & Product Quality"
+                >
+                  <MessageSquare className="w-3.5 h-3.5 text-amber-700" />
+                  <span>Rate</span>
+                </button>
+
+                <button className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-emerald-50 text-xs font-bold text-slate-700 rounded-xl transition-colors cursor-pointer">
+                  View DAG
                 </button>
               </div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Direct Consumer Appreciation & Reviews Hub */}
+      <StakeholderFeedbackHub
+        user={user}
+        role="CONSUMER"
+        onSelectBatch={onSelectBatch}
+      />
+
+      {feedbackBatchId && (
+        <UnifiedFeedbackModal
+          isOpen={!!feedbackBatchId}
+          onClose={() => setFeedbackBatchId(null)}
+          initialBatchId={feedbackBatchId}
+          fromRole="CONSUMER"
+          targetRole="FARMER"
+          targetEntityName="Farmer & Producer Origin"
+          submittedBy={user.name}
+        />
+      )}
     </div>
   );
 };

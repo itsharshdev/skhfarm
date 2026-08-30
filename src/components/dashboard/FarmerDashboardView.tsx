@@ -6,6 +6,8 @@ import { TransferBatchModal } from '../operations/TransferBatchModal';
 import { BatchQRModal } from '../operations/BatchQRModal';
 import { StatusBadge } from '../common/StatusBadge';
 import { FarmerReputationHub } from '../farmer/FarmerReputationHub';
+import { FarmerFeedbackHub } from '../farmer/FarmerFeedbackHub';
+import { UnifiedFeedbackModal } from '../operations/UnifiedFeedbackModal';
 import {
   Tractor,
   Plus,
@@ -28,6 +30,7 @@ import {
   Unlock,
   Trash2,
   ExternalLink,
+  MessageSquare,
   X,
 } from 'lucide-react';
 
@@ -42,6 +45,7 @@ export const FarmerDashboardView: React.FC<FarmerDashboardViewProps> = ({ user, 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedBatchForTransfer, setSelectedBatchForTransfer] = useState<Batch | null>(null);
   const [selectedBatchForQR, setSelectedBatchForQR] = useState<Batch | null>(null);
+  const [selectedBatchForFeedback, setSelectedBatchForFeedback] = useState<Batch | null>(null);
 
   // Form State
   const [productName, setProductName] = useState('Raw Sharbati Organic Wheat (Bulk)');
@@ -240,6 +244,9 @@ export const FarmerDashboardView: React.FC<FarmerDashboardViewProps> = ({ user, 
       {/* Farmer Reputation & Badges Loop */}
       <FarmerReputationHub user={user} batches={batches} />
 
+      {/* Farmer Voice & Multi-Stakeholder Feedback Hub */}
+      <FarmerFeedbackHub user={user} batches={batches} onSelectBatch={onSelectBatch} />
+
       {/* Batches Registered by this Farmer */}
       <div className="bg-white rounded-3xl border border-slate-200/90 p-6 md:p-8 space-y-6 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -321,16 +328,29 @@ export const FarmerDashboardView: React.FC<FarmerDashboardViewProps> = ({ user, 
                 </div>
 
                 {/* Card Action Buttons */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                  <button
-                    id={`view-qr-btn-${batch.batchId}`}
-                    type="button"
-                    onClick={() => setSelectedBatchForQR(batch)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>QR Label</span>
-                  </button>
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      id={`view-qr-btn-${batch.batchId}`}
+                      type="button"
+                      onClick={() => setSelectedBatchForQR(batch)}
+                      className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>QR</span>
+                    </button>
+
+                    <button
+                      id={`rate-batch-btn-${batch.batchId}`}
+                      type="button"
+                      onClick={() => setSelectedBatchForFeedback(batch)}
+                      className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 font-bold rounded-xl text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Rate Mandi Buyer or Storage for this Batch"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-amber-700" />
+                      <span>Rate</span>
+                    </button>
+                  </div>
 
                   {batch.currentOwnerRole === 'FARMER' ? (
                     <button
@@ -677,6 +697,20 @@ export const FarmerDashboardView: React.FC<FarmerDashboardViewProps> = ({ user, 
           onClose={() => setSelectedBatchForQR(null)}
           batch={selectedBatchForQR}
           onInspectBatch={onSelectBatch}
+        />
+      )}
+
+      {selectedBatchForFeedback && (
+        <UnifiedFeedbackModal
+          isOpen={!!selectedBatchForFeedback}
+          onClose={() => setSelectedBatchForFeedback(null)}
+          initialBatchId={selectedBatchForFeedback.batchId}
+          fromRole="FARMER"
+          submittedBy={user.name}
+          targetRole={selectedBatchForFeedback.currentOwnerRole === 'FARMER' ? 'MANDI' : selectedBatchForFeedback.currentOwnerRole}
+          onFeedbackSubmitted={() => {
+            loadFarmerBatches();
+          }}
         />
       )}
     </div>
